@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, Alert } from 'react-native';
-import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
+import React, { useEffect, useState } from 'react';
+import { Alert, StyleSheet, Text, View } from 'react-native';
+import { WebView } from 'react-native-webview';
 
 export default function App() {
   const [locationPermission, setLocationPermission] = useState(false);
