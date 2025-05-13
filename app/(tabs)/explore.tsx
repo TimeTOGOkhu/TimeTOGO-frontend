@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
+import { TextSize, useTextSize } from '../../components/TextSize';
 import {
   Alert,
   StyleSheet,
@@ -72,11 +73,11 @@ export default function ExploreScreen() {
           <View style={styles.main}>
             <View style={styles.row}>
               <Pressable style={styles.setButton} onPress={() => setShowModal(true)}>
-                <Text style={styles.setButtonText}>
+                <TextSize style={styles.setButtonText}>
                   {arrival ? formatKoreanDate(arrival) : '도착 시간 설정'}
-                </Text>
+                </TextSize>
               </Pressable>
-              <Text style={styles.currentTime}>{formatKoreanDate(now)}</Text>
+              <TextSize style={styles.currentTime}>{formatKoreanDate(now)}</TextSize>
             </View>
 
             {/* ArrivalTimeModal 연결 */}
