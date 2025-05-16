@@ -11,12 +11,34 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ArrivalTimeModal from '../../components/ArrivalTimeModal';
+import LocationInput from '../../components/LocationInput'; // ✅ 추가
+import LocationSelectModal from '../../components/LocationSelectModal'; // ✅ 추가
 
 export default function ExploreScreen() {
   const [locationPermission, setLocationPermission] = useState(false);
   const [now, setNow] = useState(new Date());
   const [arrival, setArrival] = useState<Date | null>(null);
   const [showModal, setShowModal] = useState(false);
+  
+  // 출발지 위치 정보를 저장하는 상태
+  const [startLocation, setStartLocation] = useState<{
+    name: string; // name: 장소명
+    latitude: number; // latitude: 위도
+    longitude: number; // longitude: 경도
+  } | null>(null);
+  
+  // 출발지 선택 모달의 표시 여부를 제어하는 상태
+  const [startModalVisible, setStartModalVisible] = useState(false);
+  
+  // 도착지 위치 정보를 저장하는 상태
+  const [endLocation, setEndLocation] = useState<{
+    name: string;  // name: 장소명
+    latitude: number; // latitude: 위도
+    longitude: number; // longitude: 경도
+  } | null>(null);
+  
+  // 도착지 선택 모달의 표시 여부를 제어하는 상태
+  const [endModalVisible, setEndModalVisible] = useState(false);
 
   // 위치 권한 요청
   useEffect(() => {
@@ -51,13 +73,22 @@ export default function ExploreScreen() {
     return `${y}년 ${m}월 ${d}일 ${period} ${h12}시 ${min}분`;
   };
 
-  const handleCalculate = () => {
-    if (!arrival) {
+  const handleCalculate = () => {    if (!arrival) {
       Alert.alert('알림', '먼저 도착 시간을 설정해주세요.'); 
+      return;
+    }
+    if (!startLocation) {
+      Alert.alert('알림', '출발지를 선택해주세요.');
+      return;
+    }
+    if (!endLocation) {
+      Alert.alert('알림', '도착지를 선택해주세요.');
       return;
     }
     // TODO: 출발 시간 계산 로직
     console.log('도착시간:', arrival);
+    console.log('출발지:', startLocation);
+    console.log('도착지:', endLocation);
   };
 
   return (
@@ -70,7 +101,38 @@ export default function ExploreScreen() {
           </View>
 
           {/* 메인 UI */}
-          <View style={styles.main}>
+          <View style={styles.main}>            {/* 출발지 선택 필드 */}
+            <LocationInput
+              label="출발지"
+              value={startLocation?.name}
+              placeholder="출발지를 선택하세요"
+              onPress={() => setStartModalVisible(true)}
+            />
+
+            {/* 도착지 선택 필드 */}
+            <LocationInput
+              label="도착지"
+              value={endLocation?.name}
+              placeholder="도착지를 선택하세요"
+              onPress={() => setEndModalVisible(true)}
+            />
+
+            {/* 출발지 모달 */}
+            <LocationSelectModal
+              visible={startModalVisible}
+              onClose={() => setStartModalVisible(false)}
+              onSelectLocation={(loc) => setStartLocation(loc)}
+              type="출발지"
+            />
+
+            {/* 도착지 모달 */}
+            <LocationSelectModal
+              visible={endModalVisible}
+              onClose={() => setEndModalVisible(false)}
+              onSelectLocation={(loc) => setEndLocation(loc)}
+              type="도착지"
+            />
+
             <View style={styles.row}>
               <Pressable style={styles.setButton} onPress={() => setShowModal(true)}>
                 <TextSize style={styles.setButtonText}>
