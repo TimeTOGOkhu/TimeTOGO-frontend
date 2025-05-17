@@ -47,7 +47,8 @@ export default function SettingsScreen() {
             />
           </View>
 
-          {/* <View style={[styles.row, { marginTop: 16 }]}>
+          {/* 
+          <View style={[styles.row, { marginTop: 16 }]}>
             <TextMedium style={styles.label}>글꼴 크기</TextMedium>
             <View style={styles.fontSizeSelector}>
               <Pressable 
