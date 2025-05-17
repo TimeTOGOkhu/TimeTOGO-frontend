@@ -1,4 +1,4 @@
-import { useFontSize } from '@/hooks/useFontSize';
+import { useFontSize } from '@hooks/useFontSize';
 import Feather from '@expo/vector-icons/Feather';
 import { Tabs } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
