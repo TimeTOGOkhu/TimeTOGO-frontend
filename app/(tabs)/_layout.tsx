@@ -1,8 +1,10 @@
+import { useFontSize } from '@hooks/useFontSize';
 import Feather from '@expo/vector-icons/Feather';
 import { Tabs } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
+  const { getSize } = useFontSize();
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff', }} edges={['bottom']}>
@@ -21,8 +23,15 @@ export default function TabLayout() {
           },
           tabBarActiveTintColor: '#3457D5',
           tabBarInactiveTintColor: '#94A3B8',
-          tabBarLabelStyle: { fontSize: 12, fontWeight: 'bold', marginTop: 3 },
-          tabBarStyle: { height: 64, width: '100%', paddingTop: 3 },
+          tabBarLabelStyle: { 
+            fontSize: getSize('small'), 
+            fontWeight: 'bold', 
+            marginTop: 3 
+          },
+          tabBarStyle: {
+            height: getSize('small') + 52,
+            width: '100%',
+            paddingTop: 3 },
         })}
       >
         <Tabs.Screen

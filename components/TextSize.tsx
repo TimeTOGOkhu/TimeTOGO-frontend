@@ -1,47 +1,71 @@
-import React, { createContext, useContext, useState } from 'react';
+import React from 'react';
 import { Text, TextProps } from 'react-native';
+import { useFontSize } from '@hooks/useFontSize';
 
-// 🔹 Context 타입 정의
-type TextSizeContextType = {
-  isLargeText: boolean;
-  toggleTextSize: () => void;
-};
+/**
+ * Enhanced Text component that supports dynamic font sizing based on app settings
+ */
+interface TextSizeProps extends TextProps {
+  size?: 'tiny' | 'small' | 'normal' | 'medium' | 'large' | 'xlarge' | 'xxlarge' | 'xxxlarge';
+}
 
-// 🔹 Context 생성
-const TextSizeContext = createContext<TextSizeContextType | undefined>(undefined);
-
-// 🔹 Provider
-export const TextSizeProvider = ({ children }: { children: React.ReactNode }) => {
-  const [isLargeText, setIsLargeText] = useState(false);
-  const toggleTextSize = () => setIsLargeText(prev => !prev);
-
-  return (
-    <TextSizeContext.Provider value={{ isLargeText, toggleTextSize }}>
-      {children}
-    </TextSizeContext.Provider>
-  );
-};
-
-// 🔹 Hook
-export const useTextSize = () => {
-  const context = useContext(TextSizeContext);
-  if (!context) {
-    throw new Error('useTextSize must be used within a TextSizeProvider');
-  }
-  return context;
-};
-
-// ✅ 텍스트 출력 컴포넌트까지 포함시킴
-export const TextSize = ({ style, ...props }: TextProps) => {
-  const { isLargeText } = useTextSize();
+export const TextSize: React.FC<TextSizeProps> = ({
+  style,
+  size = 'normal',
+  ...props
+}) => {
+  const { getSize } = useFontSize();
 
   return (
     <Text
       style={[
-        { fontSize: isLargeText ? 24 : 16 }, // ✅ 전역 상태로 크기 결정
+        { fontSize: getSize(size) }, // Dynamic font size from settings store
         style,
       ]}
       {...props}
     />
   );
 };
+
+// 일반적으로 사용되는 텍스트 크기 컴포넌트들을 미리 정의
+export const TextTiny: React.FC<TextProps> = (props) => <TextSize size="tiny" {...props} />;
+export const TextSmall: React.FC<TextProps> = (props) => <TextSize size="small" {...props} />;
+export const TextNormal: React.FC<TextProps> = (props) => <TextSize size="normal" {...props} />;
+export const TextMedium: React.FC<TextProps> = (props) => <TextSize size="medium" {...props} />;
+export const TextLarge: React.FC<TextProps> = (props) => <TextSize size="large" {...props} />;
+export const TextXLarge: React.FC<TextProps> = (props) => <TextSize size="xlarge" {...props} />;
+export const TextXXLarge: React.FC<TextProps> = (props) => <TextSize size="xxlarge" {...props} />;
+export const TextXXXLarge: React.FC<TextProps> = (props) => <TextSize size="xxxlarge" {...props} />;
+
+// 타이틀과 같은 특수 목적 텍스트
+export const TextTitle: React.FC<TextProps> = ({ style, ...props }) => (
+  <TextSize
+    size="xlarge"
+    style={[{ fontWeight: 'bold' }, style]}
+    {...props}
+  />
+);
+
+export const TextHeading: React.FC<TextProps> = ({ style, ...props }) => (
+  <TextSize
+    size="large"
+    style={[{ fontWeight: 'bold' }, style]}
+    {...props}
+  />
+);
+
+export const TextSubheading: React.FC<TextProps> = ({ style, ...props }) => (
+  <TextSize
+    size="medium"
+    style={[{ fontWeight: '600' }, style]}
+    {...props}
+  />
+);
+
+export const TextCaption: React.FC<TextProps> = ({ style, ...props }) => (
+  <TextSize
+    size="small"
+    style={[{ color: '#666' }, style]}
+    {...props}
+  />
+);

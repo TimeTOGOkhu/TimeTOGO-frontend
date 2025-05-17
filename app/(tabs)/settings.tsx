@@ -1,12 +1,34 @@
-import { Text, View, Switch, ScrollView, TextInput, StyleSheet } from 'react-native';
-import { TextSize, useTextSize } from '../../components/TextSize';
+import { Text, View, Switch, ScrollView, TextInput, StyleSheet, Pressable } from 'react-native';
+import { TextMedium } from '@components/TextSize';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSettingsStore } from '@store/settingsStore';
+import { useFontSize } from '@hooks/useFontSize';
 
 export default function SettingsScreen() {
-  const { isLargeText, toggleTextSize } = useTextSize();
   const [isNotificationEnabled, setIsNotificationEnabled] = useState(true);
   const [extraTime, setExtraTime] = useState('5');
+  
+  // Zustand 설정 스토어
+  const fontSize = useSettingsStore(state => state.fontSize);
+  const setFontSize = useSettingsStore(state => state.setFontSize);
+  
+  // 폰트 크기 유틸리티 
+  const { getSize } = useFontSize();
+  
+  // 더 큰 텍스트 토글 상태
+  const [isLargeText, setIsLargeText] = useState(fontSize === 'large');
+  
+  // 토글이 변경될 때 폰트 크기 업데이트
+  const handleToggleLargeText = (value: boolean) => {
+    setIsLargeText(value);
+    setFontSize(value ? 'large' : 'medium');
+  };
+  
+  // fontSize 상태가 외부에서 변경될 때 isLargeText 업데이트
+  useEffect(() => {
+    setIsLargeText(fontSize === 'large');
+  }, [fontSize]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top']}>
@@ -18,14 +40,63 @@ export default function SettingsScreen() {
         {/* 큰 텍스트 */}
         <View style={styles.card}>
           <View style={styles.row}>
-            <TextSize style={styles.label}>더 큰 텍스트</TextSize>
-            <Switch value={isLargeText} onValueChange={toggleTextSize} />
+            <TextMedium style={styles.label}>더 큰 텍스트</TextMedium>
+            <Switch 
+              value={isLargeText} 
+              onValueChange={handleToggleLargeText}
+            />
           </View>
 
+          {/* 
           <View style={[styles.row, { marginTop: 16 }]}>
-            <TextSize style={styles.label}>언어 선택</TextSize>
+            <TextMedium style={styles.label}>글꼴 크기</TextMedium>
+            <View style={styles.fontSizeSelector}>
+              <Pressable 
+                style={[
+                  styles.fontSizeButton, 
+                  fontSize === 'small' && styles.selectedFontSize
+                ]}
+                onPress={() => setFontSize('small')}
+              >
+                <Text style={[styles.fontSizeText, fontSize === 'small' && styles.selectedFontSizeText]}>
+                  작게
+                </Text>
+              </Pressable>
+              <Pressable 
+                style={[
+                  styles.fontSizeButton, 
+                  fontSize === 'medium' && styles.selectedFontSize
+                ]}
+                onPress={() => {
+                  setFontSize('medium');
+                  setIsLargeText(false);
+                }}
+              >
+                <Text style={[styles.fontSizeText, fontSize === 'medium' && styles.selectedFontSizeText]}>
+                  보통
+                </Text>
+              </Pressable>
+              <Pressable 
+                style={[
+                  styles.fontSizeButton, 
+                  fontSize === 'large' && styles.selectedFontSize
+                ]}
+                onPress={() => {
+                  setFontSize('large');
+                  setIsLargeText(true);
+                }}
+              >
+                <Text style={[styles.fontSizeText, fontSize === 'large' && styles.selectedFontSizeText]}>
+                  크게
+                </Text>
+              </Pressable>
+            </View>
+          </View> */}
+
+          <View style={[styles.row, { marginTop: 16 }]}>
+            <TextMedium style={styles.label}>언어 선택</TextMedium>
             <View style={styles.dropdownBox}>
-              <TextSize>한글 ▼</TextSize>
+              <TextMedium>한글 ▼</TextMedium>
             </View>
           </View>
         </View>
@@ -33,7 +104,7 @@ export default function SettingsScreen() {
         {/* 알림 설정 */}
         <View style={styles.card}>
           <View style={styles.row}>
-            <TextSize style={styles.label}>알림 설정</TextSize>
+            <TextMedium style={styles.label}>알림 설정</TextMedium>
             <Switch value={isNotificationEnabled} onValueChange={setIsNotificationEnabled} />
           </View>
         </View>
@@ -41,7 +112,7 @@ export default function SettingsScreen() {
         {/* 여유 시간 설정 */}
         <View style={styles.card}>
           <View style={styles.row}>
-            <TextSize style={styles.label}>여유 시간 설정</TextSize>
+            <TextMedium style={styles.label}>여유 시간 설정</TextMedium>
             <View style={styles.dropdownBox}>
               <TextInput
                 value={extraTime}
@@ -49,15 +120,15 @@ export default function SettingsScreen() {
                 keyboardType="numeric"
                 style={styles.input}
               />
-              <TextSize> 분</TextSize>
+              <TextMedium> 분</TextMedium>
             </View>
           </View>
         </View>
 
         {/* 기타 */}
         <View style={styles.card}>
-          <TextSize style={[styles.label, { marginBottom: 16 }]}>Help & FAQ</TextSize>
-          <TextSize style={styles.label}>About</TextSize>
+          <TextMedium style={[styles.label, { marginBottom: 16 }]}>Help & FAQ</TextMedium>
+          <TextMedium style={styles.label}>About</TextMedium>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -105,5 +176,29 @@ const styles = StyleSheet.create({
   input: {
     width: 30,
     textAlign: 'center',
+  },
+  fontSizeSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: 160,
+  },
+  fontSizeButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#D0D0D0',
+  },
+  selectedFontSize: {
+    backgroundColor: '#3457D5',
+    borderColor: '#3457D5',
+  },
+  fontSizeText: {
+    color: '#666',
+    fontSize: 12,
+  },
+  selectedFontSizeText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });
