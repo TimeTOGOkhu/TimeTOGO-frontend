@@ -1,16 +1,19 @@
 import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
-import { TextSize, useTextSize } from '../../components/TextSize';
+import { TextSize } from '@components/TextSize';
 import {
   Alert,
   StyleSheet,
   Text,
   View,
   Pressable,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import ArrivalTimeModal from '../../components/ArrivalTimeModal';
+import { router } from 'expo-router';
+import ArrivalTimeModal from '@components/ArrivalTimeModal';
+import { useCalculationStore } from '@store/calculationStore';
+import { useFontSize } from '@hooks/useFontSize';
+// import { calculateRoute, searchLocation } from '@services/routeService';
 
 export default function ExploreScreen() {
   const [locationPermission, setLocationPermission] = useState(false);
@@ -31,6 +34,33 @@ export default function ExploreScreen() {
         return;
       }
       setLocationPermission(true);
+      
+      // 현재 위치 정보 가져오기
+      try {
+        const location = await Location.getCurrentPositionAsync({});
+        // 현재 위치를 출발지로 설정
+        const { latitude, longitude } = location.coords;
+        
+        // 주소 조회 (역지오코딩)
+        const [addressInfo] = await Location.reverseGeocodeAsync({
+          latitude,
+          longitude,
+        });
+        
+        // 출발지 설정
+        useCalculationStore.getState().setOrigin({
+          name: '현재 위치',
+          address: `${addressInfo.city || ''} ${addressInfo.street || ''} ${addressInfo.streetNumber || ''}`.trim(),
+          coordinates: { latitude, longitude }
+        });
+        
+        // TODO: 여기서 실제 위치 검색 API를 호출할 수 있습니다.
+        // 예: searchLocation 함수를 활용하여 현재 위치 기반 정보 검색
+        // const locationData = await searchLocation(`${addressInfo.city} ${addressInfo.street}`);
+        // console.log('위치 검색 결과:', locationData);
+      } catch (error) {
+        console.error('위치 정보를 가져오는데 실패했습니다:', error);
+      }
     })();
   }, []);
 
@@ -51,12 +81,70 @@ export default function ExploreScreen() {
     return `${y}년 ${m}월 ${d}일 ${period} ${h12}시 ${min}분`;
   };
 
-  const handleCalculate = () => {
+  const handleCalculate = async () => {
     if (!arrival) {
       Alert.alert('알림', '먼저 도착 시간을 설정해주세요.'); 
       return;
     }
-    // TODO: 출발 시간 계산 로직
+    
+    // 도착 시간을 Zustand 스토어에 저장하고 계산 시작
+    const store = useCalculationStore.getState();
+    
+    // 임시로 도착지 설정 (나중에 사용자 입력으로 대체 가능)
+    store.setDestination({
+      name: '도착지',
+      address: '수원역',
+      coordinates: {
+        latitude: 37.266616,
+        longitude: 126.999802
+      }
+    });
+    
+    // 경로 정보 설정 (실제로는 API 호출 결과로 대체해야 함)
+    store.setRoute({
+      distance: 30000, // 30km
+      duration: 2400, // 40분
+      arrivalTime: arrival.toISOString(),
+      departureTime: new Date(arrival.getTime() - 2400 * 1000).toISOString() // 도착 시간에서 40분 뺀 시간
+    });
+    
+    // TODO: 실제 API 호출로 대체
+    // 출발지와 도착지 좌표 가져오기
+    // try {
+    //   const originCoords = store.origin?.coordinates;
+    //   const destCoords = store.destination?.coordinates;
+    //   
+    //   if (!originCoords || !destCoords) {
+    //     Alert.alert('오류', '출발지 또는 도착지 정보가 없습니다.');
+    //     return;
+    //   }
+    //   
+    //   // calculateRoute 함수 호출
+    //   await calculateRoute({
+    //     originLat: originCoords.latitude,
+    //     originLng: originCoords.longitude,
+    //     destinationLat: destCoords.latitude,
+    //     destinationLng: destCoords.longitude,
+    //     arrivalTime: arrival.toISOString()
+    //   });
+    //   
+    //   // 계산이 완료되면 결과 페이지로 이동
+    //   router.navigate('../result');
+    // } catch (error) {
+    //   console.error('경로 계산 오류:', error);
+    //   Alert.alert('오류', '경로 계산 중 문제가 발생했습니다.');
+    // }
+    
+    // 날씨 정보 설정 (실제로는 API 호출 결과로 대체해야 함)
+    store.setWeather({
+      condition: 'rainy',
+      temperature: 18,
+      humidity: 85,
+      windSpeed: 3.2
+    });
+    
+    // 계산 결과 페이지로 이동
+    router.navigate('../result');
     console.log('도착시간:', arrival);
   };
 
