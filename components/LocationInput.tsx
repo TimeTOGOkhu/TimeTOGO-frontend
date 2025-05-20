@@ -23,12 +23,12 @@ export default function LocationInput({ label, value, placeholder, onPress }: Pr
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
+    marginBottom: -20,
   },
   label: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 6,
+    marginBottom: 0,
     color: '#333',
   },
   inputBox: {
