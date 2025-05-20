@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal, View, StyleSheet, Dimensions, Text, TouchableOpacity } from 'react-native';
-//import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import MapView, { Marker } from 'react-native-maps';
+import CustomGooglePlacesAutocomplete from '@/components/GooglePlacesAutocomplete'; // ✅ 만든 커스텀 컴포넌트로 교체
 
 const { width, height } = Dimensions.get('window');
 
@@ -23,36 +23,16 @@ export default function LocationSelectModal({ visible, onClose, onSelectLocation
   return (
     <Modal visible={visible} animationType="slide">
       <View style={styles.container}>
-        <Text style={styles.title}>{type}선택</Text>
+        <Text style={styles.title}>{type} 선택</Text>
 
-        {/* <GooglePlacesAutocomplete
-          placeholder="장소 검색"
-          fetchDetails={true}
-          query={{
-            key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY!,
-            language: 'ko',
+        {/* ✅ 자동완성 입력창 - 커스텀 컴포넌트 사용 */}
+        <CustomGooglePlacesAutocomplete
+          apiKey={process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY!}
+          onSelect={({ name, latitude, longitude }) => {
+            setSelectedCoord({ latitude, longitude });
+            setPlaceName(name);
           }}
-          onPress={(data, details = null) => {
-            if (!details || !details.geometry || !details.geometry.location) {
-              setPlaceName(data.description || '선택된 장소');
-              if (data && data.structured_formatting && data.structured_formatting.main_text) {
-                setPlaceName(data.structured_formatting.main_text);
-              }
-              // 좌표 정보가 없으면 선택 불가 안내
-              alert('장소의 위치 정보를 가져올 수 없습니다. 다른 장소를 선택해주세요.');
-              return;
-            }
-            const location = details.geometry.location;
-            setSelectedCoord({ latitude: location.lat, longitude: location.lng });
-            setPlaceName(data.description ?? '선택된 장소');
-          }}
-          enablePoweredByContainer={false} // ⬅ 선택적 추가
-          styles={{
-            textInput: styles.searchInput,
-            listView: styles.searchList,
-          }}
-          onFail={(error) => console.log('❌ 자동완성 에러:', error)}
-        /> */}
+        />
 
         <MapView
           style={styles.map}
@@ -114,15 +94,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 16,
-  },
-  searchInput: {
-    borderColor: '#ccc',
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 10,
-  },
-  searchList: {
-    backgroundColor: 'white',
   },
   map: {
     flex: 1,
