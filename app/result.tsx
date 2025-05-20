@@ -19,6 +19,31 @@ import {
 } from "@components/TextSize";
 import { DynamicIcon } from "@components/DynamicIcon";
 import PressableOpacity from "@/components/PressableOpacity";
+import Feather from '@expo/vector-icons/Feather';
+
+// 경로 단계 타입 정의
+interface RouteStep {
+  mode: 'WALKING' | 'TRANSIT';
+  start_location: {
+    lat: number;
+    lng: number;
+  };
+  end_location: {
+    lat: number;
+    lng: number;
+  };
+  weather_condition?: any;
+  instruction?: string;
+  duration_text?: string;
+  distance_text?: string;
+  vehicle_type?: string;
+  line_name?: string;
+  departure_stop?: string;
+  departure_time?: string;
+  arrival_stop?: string;
+  arrival_time?: string;
+  num_stops?: number;
+}
 
 export default function ResultScreen() {
   // Zustand 스토어에서 계산 결과 가져오기
@@ -29,49 +54,80 @@ export default function ResultScreen() {
   const getWeatherInfo = () => {
     if (!weather)
       return { icon: "sun", message: "날씨 정보 없음", iconColor: "#FFC107" };
+    
+    // 날씨 아이콘이 제공되는 경우 OpenWeatherMap에서 가져온 아이콘 사용
+    const openWeatherIconMap: Record<string, string> = {
+      "01d": "sun",
+      "01n": "moon",
+      "02d": "cloud-sun",
+      "02n": "cloud-moon",
+      "03d": "cloud",
+      "03n": "cloud",
+      "04d": "cloud",
+      "04n": "cloud",
+      "09d": "cloud-drizzle",
+      "09n": "cloud-drizzle",
+      "10d": "cloud-rain",
+      "10n": "cloud-rain",
+      "11d": "cloud-lightning",
+      "11n": "cloud-lightning",
+      "13d": "cloud-snow",
+      "13n": "cloud-snow",
+      "50d": "wind",
+      "50n": "wind"
+    };
 
+    // 강수확률 메시지 생성
+    let precipMessage = "";
+    if (weather.precipitationChance !== undefined && weather.precipitationChance > 0) {
+      precipMessage = `강수확률 ${weather.precipitationChance}%`;
+    }
+
+    // 날씨에 따른 메시지와 아이콘 결정
     switch (weather.condition) {
       case "sunny":
         return {
-          icon: "sun",
-          message: "맑은 날씨입니다!",
+          icon: weather.icon && openWeatherIconMap[weather.icon] ? openWeatherIconMap[weather.icon] : "sun",
+          message: `맑은 날씨입니다! ${precipMessage}`,
           iconColor: "#FFC107",
         };
       case "cloudy":
         return {
-          icon: "cloud",
-          message: "구름이 많습니다.",
+          icon: weather.icon && openWeatherIconMap[weather.icon] ? openWeatherIconMap[weather.icon] : "cloud",
+          message: `구름이 많습니다. ${precipMessage}`,
           iconColor: "#607D8B",
         };
       case "rainy":
         return {
-          icon: "umbrella",
-          message: "비가 오니 우산을 챙기세요!",
+          icon: weather.icon && openWeatherIconMap[weather.icon] ? openWeatherIconMap[weather.icon] : "umbrella",
+          message: `비가 오니 우산을 챙기세요! ${precipMessage}`,
           iconColor: "#333",
         };
       case "snowy":
         return {
-          icon: "cloud-snow",
-          message: "눈이 오니 따뜻하게 입으세요!",
+          icon: weather.icon && openWeatherIconMap[weather.icon] ? openWeatherIconMap[weather.icon] : "cloud-snow",
+          message: `눈이 오니 따뜻하게 입으세요! ${precipMessage}`,
           iconColor: "#90A4AE",
         };
       default:
         return {
-          icon: "sun",
-          message: "날씨 정보를 확인하세요.",
+          icon: weather.icon && openWeatherIconMap[weather.icon] ? openWeatherIconMap[weather.icon] : "sun",
+          message: `날씨 정보를 확인하세요. ${precipMessage}`,
           iconColor: "#FFC107",
         };
     }
   };
 
-  // 경로 정보가 없으면 홈으로 이동
+  // 경로 정보가 없거나 에러가 발생하면 처리
   useEffect(() => {
-    if (!route && !isLoading) {
-      Alert.alert("오류", "경로 계산 정보가 없습니다.", [
+    // 로딩이 끝났는데 route가 없거나 error가 있는 경우
+    if (!isLoading && (!route || error)) {
+      const errorMessage = error || "경로 계산 정보가 없습니다.";
+      Alert.alert("오류", errorMessage, [
         { text: "홈으로", onPress: () => router.back() },
       ]);
     }
-  }, [route, isLoading]);
+  }, [route, isLoading, error]);
 
   const handleBackPress = () => {
     router.back(); // 이전 화면으로 돌아가기
@@ -97,6 +153,9 @@ export default function ResultScreen() {
           <TextMedium style={styles.loadingText}>
             경로를 계산하는 중...
           </TextMedium>
+          <TextSmall style={styles.loadingText}>
+            잠시만 기다려 주세요
+          </TextSmall>
         </View>
       </SafeAreaView>
     );
@@ -109,6 +168,23 @@ export default function ResultScreen() {
         <View style={styles.errorContainer}>
           <DynamicIcon name="alert-circle" size={48} color="#FF3B30" />
           <TextMedium style={styles.errorText}>{error}</TextMedium>
+          <Pressable onPress={handleBackPress} style={styles.backButton}>
+            <TextMedium style={styles.backButtonText}>
+              홈으로 돌아가기
+            </TextMedium>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // 로딩이 끝났는데 경로 정보가 없으면 에러 표시
+  if (!route) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <View style={styles.errorContainer}>
+          <DynamicIcon name="x-circle" size={48} color="#FF9500" />
+          <TextMedium style={styles.errorText}>경로 정보를 찾을 수 없습니다</TextMedium>
           <Pressable onPress={handleBackPress} style={styles.backButton}>
             <TextMedium style={styles.backButtonText}>
               홈으로 돌아가기
@@ -259,7 +335,9 @@ export default function ResultScreen() {
                   <View style={{flexDirection: "row", alignItems: "center"}}>
                     <DynamicIcon name="truck" size={16} color="#1D72E8" style={{marginHorizontal:14}} />
                     <View style={styles.transportChip}>
-                      <TextSmall style={[styles.transportChipText]}>804 번 버스</TextSmall>
+                      <TextSmall style={[styles.transportChipText]}>
+                        {route?.steps ? route.steps.find((s: RouteStep) => s.mode === "TRANSIT")?.line_name : "버스/열차"} 
+                      </TextSmall>
                     </View>
                     <TextSmall style={[styles.transportText]}>탑승</TextSmall>
                   </View>
@@ -289,7 +367,7 @@ export default function ResultScreen() {
                     </View>
                   </View>
                   <TextMedium style={[styles.timelineLocation]}>
-                    환승 센터
+                    {route?.steps ? route.steps.find((s: RouteStep) => s.mode === "TRANSIT")?.arrival_stop : "환승 센터"}
                   </TextMedium>
                 </View>
               </View>
