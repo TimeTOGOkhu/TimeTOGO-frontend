@@ -95,6 +95,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 16,
   },
+ 
+  searchInput: {
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+  },
+  searchList: {
+    backgroundColor: 'white',
+  },
+//--------------------------------------------
+
   map: {
     flex: 1,
     marginTop: 16,
