@@ -14,6 +14,31 @@ interface Weather {
   temperature: number;
   humidity: number;
   windSpeed: number;
+  icon?: string; // OpenWeather 아이콘 코드 (03d, 01n 등)
+  precipitationChance?: number; // 강수 확률 (0-100)
+}
+
+interface RouteStep {
+  mode: 'WALKING' | 'TRANSIT';
+  start_location: {
+    lat: number;
+    lng: number;
+  };
+  end_location: {
+    lat: number;
+    lng: number;
+  };
+  weather_condition?: any;
+  instruction?: string;
+  duration_text?: string;
+  distance_text?: string;
+  vehicle_type?: string;
+  line_name?: string;
+  departure_stop?: string;
+  departure_time?: string;
+  arrival_stop?: string;
+  arrival_time?: string;
+  num_stops?: number;
 }
 
 interface RouteInfo {
@@ -21,6 +46,7 @@ interface RouteInfo {
   duration: number; // in seconds
   arrivalTime: string;
   departureTime: string;
+  steps?: RouteStep[]; // 경로 세부 단계
 }
 
 interface CalculationState {
@@ -36,6 +62,7 @@ interface CalculationState {
   setWeather: (weather: Weather) => void;
   setRoute: (route: RouteInfo) => void;
   startCalculation: () => void;
+  setLoadingFinished: () => void;
   setCalculationError: (error: string) => void;
   resetCalculation: () => void;
 }
@@ -54,6 +81,7 @@ export const useCalculationStore = create<CalculationState>((set) => ({
   setWeather: (weather) => set({ weather }),
   setRoute: (route) => set({ route }),
   startCalculation: () => set({ isLoading: true, error: null }),
+  setLoadingFinished: () => set({ isLoading: false }),
   setCalculationError: (error) => set({ error, isLoading: false }),
   resetCalculation: () => set({ 
     isLoading: false,
