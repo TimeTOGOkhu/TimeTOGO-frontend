@@ -111,6 +111,9 @@ export default function ExploreScreen() {
     return `${y}년 ${m}월 ${d}일 ${period} ${h12}시 ${min}분`;
   };
 
+  const getLocationString = (location: StoreLocation) => 
+    location.name === '지도에서 선택된 위치' || location.name === '현재 위치' ? `${location.coordinates.latitude},${location.coordinates.longitude}` : location.name;
+
   const handleCalculate = async () => {
     const store = useCalculationStore.getState();
     
