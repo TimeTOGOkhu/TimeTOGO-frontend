@@ -133,8 +133,8 @@ export default function ExploreScreen() {
       
       // 람다 함수로 경로 계산 (결과 페이지 표시 후 백그라운드에서 진행)
       calculateRoute({
-        origin: origin.name === '지도에서 선택된 위치' || origin.name === '현재 위치' ? `${origin.coordinates.latitude},${origin.coordinates.longitude}` : origin.name,
-        destination: destination.name === '지도에서 선택된 위치' || destination.name === '현재 위치' ? `${destination.coordinates.latitude},${destination.coordinates.longitude}` : destination.name,
+        origin: getLocationString(origin),
+        destination: getLocationString(destination),
         arrival_time: arrivalUnixTime
       }).catch(error => {
         console.error('경로 계산 오류:', error);
