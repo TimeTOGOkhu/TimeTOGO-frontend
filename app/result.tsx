@@ -287,7 +287,7 @@ export default function ResultScreen() {
                       {origin?.name || "현재 위치"}
                     </TextMedium>
                     <TextSmall style={[styles.locationDesc]}>
-                      {origin?.address || ""}
+                      {/* {origin?.address || ""} */} {/* reverseGeocodeAsync 필요 */}
                     </TextSmall>
                   </View>
                 </View>
@@ -302,7 +302,7 @@ export default function ResultScreen() {
                       {destination?.name || "목적지"}
                     </TextMedium>
                     <TextSmall style={[styles.locationDesc]}>
-                      {destination?.address || ""}
+                      {/* {destination?.address || ""} */} {/* reverseGeocodeAsync 필요 */}
                     </TextSmall>
                   </View>
                 </View>

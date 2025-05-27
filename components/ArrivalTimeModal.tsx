@@ -190,9 +190,9 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     paddingHorizontal: 16,
     marginBottom: 12,
+    width: '100%',
   },
   field: {
-    flex: 1,
     height: 56,
     borderWidth: 1,
     borderColor: '#ddd',
@@ -202,6 +202,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginVertical: 8,
+    width: '100%',
   },
   fieldLabel: {
     color: '#666',

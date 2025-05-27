@@ -1,25 +1,68 @@
 import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
-import { TextSize } from '@components/TextSize';
 import {
   Alert,
   StyleSheet,
   Text,
-  View,
-  Pressable,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import ArrivalTimeModal from '@components/ArrivalTimeModal';
-import { useCalculationStore } from '@store/calculationStore';
-import { useFontSize } from '@hooks/useFontSize';
-import { calculateRoute, searchLocation } from '@services/routeService';
+import LocationInput from '@components/LocationInput';
+import LocationSelectModal from '@components/LocationSelectModal';
+import PressableOpacity from "@/components/PressableOpacity";
+import { useCalculationStore, Location as StoreLocation } from '@store/calculationStore';
+import { calculateRoute } from '@services/routeService';
+import Svg, { Circle } from 'react-native-svg';
 
 export default function ExploreScreen() {
   const [locationPermission, setLocationPermission] = useState(false);
   const [now, setNow] = useState(new Date());
   const [arrival, setArrival] = useState<Date | null>(null);
-  const [showModal, setShowModal] = useState(false);
+
+  // 출발지 위치 정보
+  const [startLocation, setStartLocation] = useState<StoreLocation| null>(null);
+
+  // 출발지 선택 모달
+  const [startModalVisible, setStartModalVisible] = useState(false);
+
+  // 도착지 위치 정보
+  const [endLocation, setEndLocation] = useState<StoreLocation| null>(null);
+
+  // 도착지 선택 모달
+  const [endModalVisible, setEndModalVisible] = useState(false);
+
+  // 도착시간 모달
+  const [showArrivalModal, setShowArrivalModal] = useState(false);
+
+  // 로고 클릭 시 미입력 모달 오픈
+  const handleLogoClick = () => {
+    if (!startLocation) setStartModalVisible(true);
+    else if (!endLocation) setEndModalVisible(true);
+    else if (!arrival) setShowArrivalModal(true);
+    else {
+      const store = useCalculationStore.getState();
+      store.setOrigin(startLocation);
+      store.setDestination(endLocation);
+      handleCalculate();
+    }
+  };
+
+  // 안내 메시지
+  let guideMsg = '';
+  if (!startLocation) guideMsg = '출발지를 선택하세요';
+  else if (!endLocation) guideMsg = '도착지를 선택하세요';
+  else if (!arrival) guideMsg = '도착시간을 선택하세요';
+  else guideMsg = '로고를 클릭하세요';
+
+  // 동그라미/도넛 투명도
+  const getCircleAlpha = (idx: number) => {
+    if (idx === 0 && startLocation) return 1;
+    if (idx === 1 && endLocation) return 1;
+    if (idx === 2 && arrival) return 1;
+    return 0.3;
+  };
 
   // 위치 권한 요청
   useEffect(() => {
@@ -40,24 +83,11 @@ export default function ExploreScreen() {
         const location = await Location.getCurrentPositionAsync({});
         // 현재 위치를 출발지로 설정
         const { latitude, longitude } = location.coords;
-        
-        // 주소 조회 (역지오코딩)
-        const [addressInfo] = await Location.reverseGeocodeAsync({
-          latitude,
-          longitude,
-        });
-        
-        // 출발지 설정
-        useCalculationStore.getState().setOrigin({
+        setStartLocation({
           name: '현재 위치',
-          address: `${addressInfo.city || ''} ${addressInfo.street || ''} ${addressInfo.streetNumber || ''}`.trim(),
           coordinates: { latitude, longitude }
         });
-        
-        // TODO: 여기서 실제 위치 검색 API를 호출할 수 있습니다.
-        // 예: searchLocation 함수를 활용하여 현재 위치 기반 정보 검색
-        // const locationData = await searchLocation(`${addressInfo.city} ${addressInfo.street}`);
-        // console.log('위치 검색 결과:', locationData);
+
       } catch (error) {
         console.error('위치 정보를 가져오는데 실패했습니다:', error);
       }
@@ -81,26 +111,11 @@ export default function ExploreScreen() {
     return `${y}년 ${m}월 ${d}일 ${period} ${h12}시 ${min}분`;
   };
 
+  const getLocationString = (location: StoreLocation) => 
+    location.name === '지도에서 선택된 위치' || location.name === '현재 위치' ? `${location.coordinates.latitude},${location.coordinates.longitude}` : location.name;
+
   const handleCalculate = async () => {
-    if (!arrival) {
-      Alert.alert('알림', '먼저 도착 시간을 설정해주세요.'); 
-      return;
-    }
-    
-    // 도착 시간을 Zustand 스토어에 저장하고 계산 시작
     const store = useCalculationStore.getState();
-    
-    // 임시 도착지 설정 (나중에 사용자 입력으로 대체)
-    if (!store.destination) {
-      store.setDestination({
-        name: '동탄예당마을',
-        address: '경기도 화성시 석우동',
-        coordinates: {
-          latitude: 37.210025,
-          longitude: 127.076387
-        }
-      });
-    }
     
     try {
       // 출발지와 도착지 정보 가져오기
@@ -113,7 +128,7 @@ export default function ExploreScreen() {
       }
       
       // 도착 시간을 유닉스 타임스탬프로 변환
-      const arrivalUnixTime = Math.floor(arrival.getTime() / 1000).toString();
+      const arrivalUnixTime = Math.floor(arrival!.getTime() / 1000).toString();
       
       // 계산 시작 및 결과 페이지로 이동
       store.startCalculation();
@@ -121,8 +136,8 @@ export default function ExploreScreen() {
       
       // 람다 함수로 경로 계산 (결과 페이지 표시 후 백그라운드에서 진행)
       calculateRoute({
-        origin: origin.name,
-        destination: destination.name,
+        origin: getLocationString(origin),
+        destination: getLocationString(destination),
         arrival_time: arrivalUnixTime
       }).catch(error => {
         console.error('경로 계산 오류:', error);
@@ -137,37 +152,110 @@ export default function ExploreScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       {locationPermission ? (
-        <View style={styles.container}>
+        <View style={styles.container} >
           {/* 헤더 */}
-          <View style={styles.header}>
-            <Text style={styles.title}>TimeTOGO</Text>
+          <View style={[styles.header, { alignItems: 'center', justifyContent: 'center' }]}>
+            <Text style={{ fontSize: 35, color: '#3457D5', fontWeight: 'bold', textAlign: 'center' }}>
+              {guideMsg}
+            </Text>
           </View>
-
+   
           {/* 메인 UI */}
           <View style={styles.main}>
-            <View style={styles.row}>
-              <Pressable style={styles.setButton} onPress={() => setShowModal(true)}>
-                <TextSize style={styles.setButtonText}>
-                  {arrival ? formatKoreanDate(arrival) : '도착 시간 설정'}
-                </TextSize>
-              </Pressable>
-              <TextSize style={styles.currentTime}>{formatKoreanDate(now)}</TextSize>
-            </View>
+            {/* 출발지 모달 */}
+            <LocationSelectModal
+              visible={startModalVisible}
+              onClose={() => setStartModalVisible(false)}
+              onSelectLocation={(loc) => {
+                setStartLocation(loc);
+                setStartModalVisible(false);
+              }}
+              type="출발지"
+            />
 
-            {/* ArrivalTimeModal 연결 */}
+            {/* 도착지 모달 */}
+            <LocationSelectModal
+              visible={endModalVisible}
+              onClose={() => setEndModalVisible(false)}
+              onSelectLocation={(loc) => {
+                setEndLocation(loc);
+                setEndModalVisible(false);
+              }}
+              type="도착지"
+            />
+
+            {/* 도착시간 모달 */}
             <ArrivalTimeModal
-              visible={showModal}
+              visible={showArrivalModal}
               initial={arrival || new Date()}
-              onCancel={() => setShowModal(false)}
+              onCancel={() => setShowArrivalModal(false)}
               onConfirm={dt => {
-                setShowModal(false);
+                setShowArrivalModal(false);
                 setArrival(dt);
               }}
             />
 
-            <Pressable style={styles.calcButton} onPress={handleCalculate}>
-              <Text style={styles.calcButtonText}>계산하기</Text>
-            </Pressable>
+            <View style={{ marginVertical: 20 }}>
+              {/* 출발지 선택 필드 */}
+              <LocationInput
+                label=""
+                value={startLocation?.name}
+                placeholder="출발지를 선택하세요"
+                onPress={() => setStartModalVisible(true)}
+              />
+
+              {/* 도착지 선택 필드 */}
+              <LocationInput
+                label=""
+                value={endLocation?.name}
+                placeholder="도착지를 선택하세요"
+                onPress={() => setEndModalVisible(true)}
+              />
+
+              {/* 도착시간 선택 필드 */}
+              <LocationInput
+                label=""
+                value={arrival ? formatKoreanDate(arrival) : ''}
+                placeholder="도착시간을 선택하세요"
+                onPress={() => setShowArrivalModal(true)}
+              />
+            </View>
+
+            {/* 로고 (SVG 기반 도넛+원) */}
+            <View style={{ alignItems: 'center', flex: 1, justifyContent: 'center' }}>
+              <PressableOpacity onPress={handleLogoClick}>
+                <Svg width={240} height={240}>
+                  {/* 바깥 도넛 */}
+                  <Circle
+                    cx={120}
+                    cy={120}
+                    r={105}
+                    stroke="rgba(55, 97, 223, 0.9)"
+                    strokeWidth={24}
+                    fill="none"
+                    opacity={getCircleAlpha(0)}
+                  />
+                  {/* 중간 도넛 */}
+                  <Circle
+                    cx={120}
+                    cy={120}
+                    r={62}
+                    stroke="rgba(55, 97, 223, 0.9)"
+                    strokeWidth={24}
+                    fill="none"
+                    opacity={getCircleAlpha(1)}
+                  />
+                  {/* 중앙 원 */}
+                  <Circle
+                    cx={120}
+                    cy={120}
+                    r={28}
+                    fill="rgba(55, 97, 223, 0.9)"
+                    opacity={getCircleAlpha(2)}
+                  />
+                </Svg>
+              </PressableOpacity>
+            </View>
           </View>
         </View>
       ) : (
@@ -203,35 +291,13 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     marginBottom: 30,
-  },
-  setButton: {
-    borderWidth: 1,
-    borderColor: '#4169E1',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  setButtonText: {
-    color: '#4169E1',
-    fontSize: 16,
   },
   currentTime: {
     fontSize: 16,
     color: '#333',
-  },
-  calcButton: {
-    backgroundColor: '#4169E1',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    width: '100%',
-  },
-  calcButtonText: {
-    color: '#fff',
-    fontSize: 18,
   },
   permissionContainer: {
     flex: 1,

@@ -49,25 +49,42 @@ interface CalculateRouteParams {
 }
 
 // Lambda 함수 API 엔드포인트
-const API_BASE_URL = 'http://172.21.64.13:5001/mock';
+const API_BASE_URL = 'http://172.21.65.108:5001/mock';
+
+const fetchWithTimeout = async (url: string, options = {}, timeout = 5000) => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    return response;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timed out');
+    }
+    throw error;
+  } finally {
+    clearTimeout(id);
+  }
+};
 
 export const calculateRoute = async (params: CalculateRouteParams) => {
   const store = useCalculationStore.getState();
-  // startCalculation은 이제 explore.tsx에서 호출됨 (미리 로딩 상태로 만들기 위해)
-
-  params.origin = "서울역";
 
   try {
     console.log('API 호출 파라미터:', params);
     
     // Lambda 함수 호출
-    const response = await fetch(API_BASE_URL, {
+    const response = await fetchWithTimeout(API_BASE_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(params)
-    });
+    }, 5000);
 
     if (!response.ok) {
       const errorText = await response.text();
