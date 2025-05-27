@@ -1,21 +1,19 @@
 import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
-import { TextSize } from '@components/TextSize';
 import {
   Alert,
   StyleSheet,
   Text,
-  View,
-  Pressable,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import ArrivalTimeModal from '@components/ArrivalTimeModal';
 import LocationInput from '@components/LocationInput';
 import LocationSelectModal from '@components/LocationSelectModal';
-import { useCalculationStore } from '@store/calculationStore';
-import { useFontSize } from '@hooks/useFontSize';
-import { calculateRoute, searchLocation } from '@services/routeService';
+import PressableOpacity from "@/components/PressableOpacity";
+import { useCalculationStore, Location as StoreLocation } from '@store/calculationStore';
+import { calculateRoute } from '@services/routeService';
 import Svg, { Circle } from 'react-native-svg';
 
 export default function ExploreScreen() {
@@ -24,21 +22,13 @@ export default function ExploreScreen() {
   const [arrival, setArrival] = useState<Date | null>(null);
 
   // 출발지 위치 정보
-  const [startLocation, setStartLocation] = useState<{
-    name: string;
-    latitude: number;
-    longitude: number;
-  } | null>(null);
+  const [startLocation, setStartLocation] = useState<StoreLocation| null>(null);
 
   // 출발지 선택 모달
   const [startModalVisible, setStartModalVisible] = useState(false);
 
   // 도착지 위치 정보
-  const [endLocation, setEndLocation] = useState<{
-    name: string;
-    latitude: number;
-    longitude: number;
-  } | null>(null);
+  const [endLocation, setEndLocation] = useState<StoreLocation| null>(null);
 
   // 도착지 선택 모달
   const [endModalVisible, setEndModalVisible] = useState(false);
@@ -51,7 +41,12 @@ export default function ExploreScreen() {
     if (!startLocation) setStartModalVisible(true);
     else if (!endLocation) setEndModalVisible(true);
     else if (!arrival) setShowArrivalModal(true);
-    // 모두 입력 시 길찾기 화면 이동은 미구현
+    else {
+      const store = useCalculationStore.getState();
+      store.setOrigin(startLocation);
+      store.setDestination(endLocation);
+      handleCalculate();
+    }
   };
 
   // 안내 메시지
@@ -88,24 +83,11 @@ export default function ExploreScreen() {
         const location = await Location.getCurrentPositionAsync({});
         // 현재 위치를 출발지로 설정
         const { latitude, longitude } = location.coords;
-        
-        // 주소 조회 (역지오코딩)
-        const [addressInfo] = await Location.reverseGeocodeAsync({
-          latitude,
-          longitude,
-        });
-        
-        // 출발지 설정
-        useCalculationStore.getState().setOrigin({
+        setStartLocation({
           name: '현재 위치',
-          address: `${addressInfo.city || ''} ${addressInfo.street || ''} ${addressInfo.streetNumber || ''}`.trim(),
           coordinates: { latitude, longitude }
         });
-        
-        // TODO: 여기서 실제 위치 검색 API를 호출할 수 있습니다.
-        // 예: searchLocation 함수를 활용하여 현재 위치 기반 정보 검색
-        // const locationData = await searchLocation(`${addressInfo.city} ${addressInfo.street}`);
-        // console.log('위치 검색 결과:', locationData);
+
       } catch (error) {
         console.error('위치 정보를 가져오는데 실패했습니다:', error);
       }
@@ -130,25 +112,7 @@ export default function ExploreScreen() {
   };
 
   const handleCalculate = async () => {
-    if (!arrival) {
-      Alert.alert('알림', '먼저 도착 시간을 설정해주세요.'); 
-      return;
-    }
-    
-    // 도착 시간을 Zustand 스토어에 저장하고 계산 시작
     const store = useCalculationStore.getState();
-    
-    // 임시 도착지 설정 (나중에 사용자 입력으로 대체)
-    if (!store.destination) {
-      store.setDestination({
-        name: '동탄예당마을',
-        address: '경기도 화성시 석우동',
-        coordinates: {
-          latitude: 37.210025,
-          longitude: 127.076387
-        }
-      });
-    }
     
     try {
       // 출발지와 도착지 정보 가져오기
@@ -161,7 +125,7 @@ export default function ExploreScreen() {
       }
       
       // 도착 시간을 유닉스 타임스탬프로 변환
-      const arrivalUnixTime = Math.floor(arrival.getTime() / 1000).toString();
+      const arrivalUnixTime = Math.floor(arrival!.getTime() / 1000).toString();
       
       // 계산 시작 및 결과 페이지로 이동
       store.startCalculation();
@@ -169,8 +133,8 @@ export default function ExploreScreen() {
       
       // 람다 함수로 경로 계산 (결과 페이지 표시 후 백그라운드에서 진행)
       calculateRoute({
-        origin: origin.name,
-        destination: destination.name,
+        origin: origin.name === '지도에서 선택된 위치' || origin.name === '현재 위치' ? `${origin.coordinates.latitude},${origin.coordinates.longitude}` : origin.name,
+        destination: destination.name === '지도에서 선택된 위치' || destination.name === '현재 위치' ? `${destination.coordinates.latitude},${destination.coordinates.longitude}` : destination.name,
         arrival_time: arrivalUnixTime
       }).catch(error => {
         console.error('경로 계산 오류:', error);
@@ -195,30 +159,6 @@ export default function ExploreScreen() {
    
           {/* 메인 UI */}
           <View style={styles.main}>
-            {/* 출발지 선택 필드 */}
-            <LocationInput
-              label=""
-              value={startLocation?.name}
-              placeholder="출발지를 선택하세요"
-              onPress={() => setStartModalVisible(true)}
-            />
-
-            {/* 도착지 선택 필드 */}
-            <LocationInput
-              label=""
-              value={endLocation?.name}
-              placeholder="도착지를 선택하세요"
-              onPress={() => setEndModalVisible(true)}
-            />
-
-            {/* 도착시간 선택 필드 */}
-            <LocationInput
-              label=""
-              value={arrival ? formatKoreanDate(arrival) : ''}
-              placeholder="도착시간을 선택하세요"
-              onPress={() => setShowArrivalModal(true)}
-            />
-
             {/* 출발지 모달 */}
             <LocationSelectModal
               visible={startModalVisible}
@@ -252,9 +192,35 @@ export default function ExploreScreen() {
               }}
             />
 
+            <View style={{ marginVertical: 20 }}>
+              {/* 출발지 선택 필드 */}
+              <LocationInput
+                label=""
+                value={startLocation?.name}
+                placeholder="출발지를 선택하세요"
+                onPress={() => setStartModalVisible(true)}
+              />
+
+              {/* 도착지 선택 필드 */}
+              <LocationInput
+                label=""
+                value={endLocation?.name}
+                placeholder="도착지를 선택하세요"
+                onPress={() => setEndModalVisible(true)}
+              />
+
+              {/* 도착시간 선택 필드 */}
+              <LocationInput
+                label=""
+                value={arrival ? formatKoreanDate(arrival) : ''}
+                placeholder="도착시간을 선택하세요"
+                onPress={() => setShowArrivalModal(true)}
+              />
+            </View>
+
             {/* 로고 (SVG 기반 도넛+원) */}
-            <View style={{ alignItems: 'center', marginTop: 120, marginBottom: 100 }}>
-              <Pressable onPress={handleLogoClick}>
+            <View style={{ alignItems: 'center', flex: 1, justifyContent: 'center' }}>
+              <PressableOpacity onPress={handleLogoClick}>
                 <Svg width={240} height={240}>
                   {/* 바깥 도넛 */}
                   <Circle
@@ -285,7 +251,7 @@ export default function ExploreScreen() {
                     opacity={getCircleAlpha(2)}
                   />
                 </Svg>
-              </Pressable>
+              </PressableOpacity>
             </View>
           </View>
         </View>

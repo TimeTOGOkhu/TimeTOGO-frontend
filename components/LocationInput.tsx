@@ -1,5 +1,9 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import {
+  TextMedium,
+} from "@components/TextSize";
+import PressableOpacity from "@/components/PressableOpacity";
 
 interface Props {
   label: string;
@@ -11,22 +15,21 @@ interface Props {
 export default function LocationInput({ label, value, placeholder, onPress }: Props) {
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
-      <Pressable style={styles.inputBox} onPress={onPress}>
-        <Text style={[styles.inputText, !value && styles.placeholderText]}>
+      <TextMedium style={[styles.label,!label && { height: 0, marginBottom: 0, padding: 0, fontSize: 0 }]}>{label}</TextMedium>
+      <PressableOpacity style={styles.inputBox} onPress={onPress}>
+        <TextMedium style={[styles.inputText, !value && styles.placeholderText]}>
           {value || placeholder || '장소를 선택해주세요'}
-        </Text>
-      </Pressable>
+        </TextMedium>
+      </PressableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: -20,
+    marginVertical: 4,
   },
   label: {
-    fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 0,
     color: '#333',
@@ -40,7 +43,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   inputText: {
-    fontSize: 16,
     color: '#000',
   },
   placeholderText: {

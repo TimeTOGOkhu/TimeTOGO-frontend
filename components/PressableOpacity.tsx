@@ -43,7 +43,7 @@ export type PressableOpacityProps = Omit<PressableProps, "style"> & {
   /**
    * Only allow the static style prop and not the functional one.
    */
-  style: StyleProp<ViewStyle>;
+  style?: StyleProp<ViewStyle>;
 };
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const PressableOpacity = ({

@@ -1,8 +1,7 @@
 import { create } from 'zustand';
 
-interface Location {
+export interface Location {
   name: string;
-  address: string;
   coordinates: {
     latitude: number;
     longitude: number;

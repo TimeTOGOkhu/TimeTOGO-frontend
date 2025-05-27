@@ -1,11 +1,18 @@
 import React from 'react';
-import { View, TextInput, FlatList, Text, TouchableOpacity } from 'react-native';
+import { View, TextInput, FlatList } from 'react-native';
 import { useState } from 'react';
+import PressableOpacity from './PressableOpacity';
+import { useFontSize } from '@hooks/useFontSize';
+import {
+  TextNormal,
+} from "@components/TextSize";
 
 export default function CustomGooglePlacesAutocomplete({ onSelect, apiKey }: {
   onSelect: (place: { name: string, latitude: number, longitude: number }) => void;
   apiKey: string;
 }) {
+  const { getSize } = useFontSize();
+
   const [query, setQuery] = useState('');
   const [predictions, setPredictions] = useState<any[]>([]);
 
@@ -46,15 +53,15 @@ export default function CustomGooglePlacesAutocomplete({ onSelect, apiKey }: {
         placeholder="장소 검색"
         value={query}
         onChangeText={fetchPredictions}
-        style={{ borderWidth: 1, borderColor: '#ccc', padding: 10, borderRadius: 8 }}
+        style={{ borderWidth: 1, borderColor: '#ccc', padding: 10, borderRadius: 8, fontSize: getSize("normal") }}
       />
       <FlatList
         data={predictions}
         keyExtractor={(item) => item.place_id}
         renderItem={({ item }) => (
-          <TouchableOpacity onPress={() => fetchPlaceDetails(item.place_id)}>
-            <Text style={{ padding: 10 }}>{item.description}</Text>
-          </TouchableOpacity>
+          <PressableOpacity onPress={() => fetchPlaceDetails(item.place_id)}>
+            <TextNormal style={{ padding: 10 }}>{item.description}</TextNormal>
+          </PressableOpacity>
         )}
       />
     </View>

@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
-import { Modal, View, StyleSheet, Dimensions, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Dimensions } from 'react-native';
+import Modal from 'react-native-modal';
 import MapView, { Marker } from 'react-native-maps';
 import CustomGooglePlacesAutocomplete from '@/components/GooglePlacesAutocomplete'; // ✅ 만든 커스텀 컴포넌트로 교체
+import { Location as StoreLocation } from '@store/calculationStore';
+import {
+  TextLarge,
+} from "@components/TextSize";
+import PressableOpacity from './PressableOpacity';
 
 const { width, height } = Dimensions.get('window');
 
 interface Props {
   visible: boolean;
   onClose: () => void;
-  onSelectLocation: (location: {
-    name: string;
-    latitude: number;
-    longitude: number;
-  }) => void;
+  onSelectLocation: (location: StoreLocation) => void;
   type: '출발지' | '도착지';
 }
 
@@ -21,9 +23,13 @@ export default function LocationSelectModal({ visible, onClose, onSelectLocation
   const [placeName, setPlaceName] = useState('');
 
   return (
-    <Modal visible={visible} animationType="slide">
+    <Modal
+      isVisible={visible}
+      onBackdropPress={onClose}
+      backdropOpacity={0.3}
+      style={styles.modal}>
       <View style={styles.container}>
-        <Text style={styles.title}>{type} 선택</Text>
+        <TextLarge style={styles.title}>{type} 선택</TextLarge>
 
         {/* ✅ 자동완성 입력창 - 커스텀 컴포넌트 사용 */}
         <CustomGooglePlacesAutocomplete
@@ -56,17 +62,19 @@ export default function LocationSelectModal({ visible, onClose, onSelectLocation
         </MapView>
 
         <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.button} onPress={onClose}>
-            <Text style={styles.buttonText}>닫기</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          <PressableOpacity style={styles.button} onPress={onClose}>
+            <TextLarge style={styles.buttonText}>닫기</TextLarge>
+          </PressableOpacity>
+          <PressableOpacity
             style={[styles.button, { backgroundColor: '#3b82f6' }]}
             onPress={() => {
               if (selectedCoord) {
                 onSelectLocation({
                   name: placeName || '선택된 위치',
-                  latitude: selectedCoord.latitude,
-                  longitude: selectedCoord.longitude,
+                  coordinates: {
+                    latitude: selectedCoord.latitude,
+                    longitude: selectedCoord.longitude,
+                    }
                 });
               } else {
                 alert('지도를 눌러 위치를 선택해주세요.');
@@ -75,8 +83,8 @@ export default function LocationSelectModal({ visible, onClose, onSelectLocation
               onClose();
             }}
           >
-            <Text style={[styles.buttonText, { color: 'white' }]}>확인</Text>
-          </TouchableOpacity>
+            <TextLarge style={[styles.buttonText, { color: 'white' }]}>확인</TextLarge>
+          </PressableOpacity>
         </View>
       </View>
     </Modal>
@@ -84,15 +92,18 @@ export default function LocationSelectModal({ visible, onClose, onSelectLocation
 }
 
 const styles = StyleSheet.create({
+  modal: {
+    justifyContent: 'center',
+    marginVertical: 100,
+  },
   container: {
     flex: 1,
-    paddingTop: 50,
+    borderRadius: 12,
     backgroundColor: '#fff',
-    paddingHorizontal: 16,
+    padding: 20,
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: 'Pretendard_Bold',
     marginBottom: 16,
   },
  
@@ -128,6 +139,5 @@ const styles = StyleSheet.create({
     borderColor: '#ccc',
   },
   buttonText: {
-    fontSize: 16,
   },
 });
