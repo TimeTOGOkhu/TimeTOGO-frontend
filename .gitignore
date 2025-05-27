@@ -1,10 +1,5 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-<<<<<<< HEAD
-=======
-.env
-
->>>>>>> 5a0c6177c00dbc9d3ecd3c64029be425152a92f1
 .vscode
 bun.lock
 bun.lockb
