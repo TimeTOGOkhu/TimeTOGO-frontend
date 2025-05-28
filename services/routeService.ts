@@ -1,5 +1,6 @@
 // API 호출을 위한 서비스 구현
 import { useCalculationStore } from '@store/calculationStore';
+import { LatLng } from 'react-native-maps';
 
 // 람다 함수 응답 타입 정의
 interface WeatherCondition {
@@ -33,6 +34,7 @@ interface RouteStep {
   arrival_stop?: string;
   arrival_time?: string;
   num_stops?: number;
+  polyline?: string;
 }
 
 interface RouteResponse {
@@ -207,4 +209,57 @@ export const searchLocation = async (query: string) => {
     console.error('위치 검색 오류:', error);
     throw error;
   }
+};
+
+/**
+ * Google 폴리라인 문자열을 디코딩하여 [latitude, longitude] 객체 배열로 반환합니다.
+ * @param encoded 문자열 (예: "}_p~F~ps|U_ulLnnqC_mqNvxq`@")
+ * @param precision 좌표 소수점 자리수 (기본값: 5)
+ */
+export const decodePolygon = (
+  encoded: string,
+  precision: number = 5
+): LatLng[] => {
+  const coordinates: LatLng[] = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+  const factor = Math.pow(10, precision);
+
+  while (index < encoded.length) {
+    // 위도 디코딩
+    let result = 0;
+    let shift = 0;
+    let byte = 0;
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    const deltaLat = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
+    lat += deltaLat;
+
+    // 경도 디코딩
+    result = 0;
+    shift = 0;
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    const deltaLng = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
+    lng += deltaLng;
+
+    // 최종 좌표 추가
+    coordinates.push({
+      latitude: lat / factor,
+      longitude: lng / factor,
+    });
+  }
+
+  return coordinates;
 };

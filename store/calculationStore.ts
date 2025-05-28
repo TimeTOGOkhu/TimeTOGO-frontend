@@ -38,6 +38,7 @@ interface RouteStep {
   arrival_stop?: string;
   arrival_time?: string;
   num_stops?: number;
+  polyline?: string;
 }
 
 interface RouteInfo {
