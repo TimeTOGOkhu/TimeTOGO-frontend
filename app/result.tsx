@@ -18,34 +18,127 @@ import {
   TextNormal,
 } from "@components/TextSize";
 import { DynamicIcon } from "@components/DynamicIcon";
+import { TransportIcon } from "@components/TransportIcon";
 import PressableOpacity from "@/components/PressableOpacity";
-import Feather from '@expo/vector-icons/Feather';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
+import { decodePolygon } from "@/services/routeService";
 
-// 경로 단계 타입 정의
-interface RouteStep {
-  mode: 'WALKING' | 'TRANSIT';
-  start_location: {
-    lat: number;
-    lng: number;
-  };
-  end_location: {
-    lat: number;
-    lng: number;
-  };
-  weather_condition?: any;
-  instruction?: string;
-  duration_text?: string;
-  distance_text?: string;
-  vehicle_type?: string;
-  line_name?: string;
-  departure_stop?: string;
-  departure_time?: string;
-  arrival_stop?: string;
-  arrival_time?: string;
-  num_stops?: number;
-}
+// 노약자와 외국인에게 더 보기 편한 지도 스타일 정의
+const mapStyle = [
+  {
+    "featureType": "all",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      { "color": "#000000" },
+      { "visibility": "on" }
+    ]
+  },
+  {
+    "featureType": "all",
+    "elementType": "labels.text.stroke",
+    "stylers": [
+      { "color": "#ffffff" },
+      { "weight": 3 }
+    ]
+  },
+  {
+    "featureType": "administrative",
+    "elementType": "geometry",
+    "stylers": [
+      { "visibility": "off" }
+    ]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "all",
+    "stylers": [
+      { "visibility": "off" }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#ffffff" },
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "labels",
+    "stylers": [
+      { "visibility": "simplified" }
+    ]
+  },
+  {
+    "featureType": "transit.station",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#d81b60" }  // 지하철/기차역 강조
+    ]
+  },
+  {
+    "featureType": "water",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#a0c8f0" }
+    ]
+  },
+  {
+    "featureType": "landscape.natural",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#e0f3db" }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#f9b233" }  // 고속도로는 밝은 노란색으로
+    ]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#ffd700" }
+    ]
+  }
+]
+;
+
+// 교통수단 유형을 한글로 변환하는 함수
+const getTransportTypeText = (vehicleType?: string): string => {
+  if (!vehicleType) return "대중교통";
+  
+  switch(vehicleType.toUpperCase()) {
+    case 'BUS': return "버스";
+    case 'SUBWAY': return "지하철";
+    case 'TRAM': return "트램";
+    case 'HEAVY_RAIL': return "기차";
+    case 'LIGHT_RAIL': return "경전철";
+    case 'WALKING': return "도보";
+    default: return "대중교통";
+  }
+};
+
+// 교통수단 유형에 따른 경로 색상 설정
+const getPolylineColor = (vehicleType?: string): string => {
+  if (!vehicleType) return "#1D72E8";  // 기본 색상
+  
+  switch(vehicleType.toUpperCase()) {
+    case 'BUS': return "#4CAF50";      // 버스는 녹색
+    case 'SUBWAY': return "#FF9800";   // 지하철은 주황색
+    case 'TRAM': return "#9C27B0";     // 트램은 보라색
+    case 'HEAVY_RAIL': return "#F44336"; // 기차는 빨간색
+    case 'LIGHT_RAIL': return "#00BCD4"; // 경전철은 시안색
+    default: return "#1D72E8";          // 기본 색상 (파란색)
+  }
+};
+
 
 export default function ResultScreen() {
+
   // Zustand 스토어에서 계산 결과 가져오기
   const { origin, destination, route, weather, isLoading, error } =
     useCalculationStore();
@@ -139,6 +232,152 @@ export default function ResultScreen() {
     const hours = date.getHours();
     const minutes = String(date.getMinutes()).padStart(2, "0");
     return `${hours}:${minutes}`;
+  };
+
+  // 상세 타임라인 렌더링 함수
+  const renderDetailedTimeline = () => {
+    if (!route || !route.steps) return null;
+    
+    return (
+      <>
+        {/* 출발 */}
+        <View style={styles.timelineItem}>
+          <View style={styles.timelineContent}>
+            <View style={{flexDirection: "row", alignItems: "center"}}>
+              <View style={styles.timelineDot}>
+                <View style={styles.blueDotSmall} />
+              </View>
+              <TextMedium style={[styles.timelineTime, {marginRight: 4}]}>
+                {formatTime(route.departureTime)}
+              </TextMedium>
+              <View style={styles.routeChip}>
+                <TextSmall style={[styles.chipText]}>출발</TextSmall>
+              </View>
+            </View>
+            <TextMedium style={[styles.timelineLocation]}>
+              {origin?.name || "현재 위치"}
+            </TextMedium>
+          </View>
+        </View>
+        
+        {/* 모든 경로 단계 표시 */}
+        {route.steps.map((step, index) => {
+          // 마지막 단계는 도착 정보만 표시
+          if (index === (route.steps?.length ?? 0) - 1) return null;
+          
+          return (
+            <React.Fragment key={`step-${index}`}>
+              {/* 도보인 경우 */}
+              {step.mode === 'WALKING' && (
+                <View style={styles.timelineItem}>
+                  <View style={styles.timelineContent}>
+                    <View style={{flexDirection: "row", alignItems: "center", marginLeft: 24}}>
+                      <TransportIcon type="WALKING" size={16} color="#2563EB" style={{marginRight: 10}} />
+                      <View style={styles.walkingChip}>
+                        <TextSmall style={[styles.walkingChipText]}>도보</TextSmall>
+                      </View>
+                      <TextSmall style={[styles.transportText]}>
+                        {step.distance_text} • {step.duration_text}
+                      </TextSmall>
+                    </View>
+                    {step.instruction && (
+                      <TextSmall style={[styles.timelineLocation, {color: '#64748B'}]}>
+                        {step.instruction}
+                      </TextSmall>
+                    )}
+                  </View>
+                </View>
+              )}
+              
+              {/* 대중교통인 경우 */}
+              {step.mode === 'TRANSIT' && (
+                <>
+                  <View style={styles.timelineItem}>
+                    <View style={styles.timelineContent}>
+                      <View style={{flexDirection: "row", alignItems: "center", marginLeft: 24}}>
+                        <TransportIcon 
+                          type={step.vehicle_type || 'DEFAULT'} 
+                          size={16} 
+                          color={getPolylineColor(step.vehicle_type)} 
+                          style={{marginRight: 10}} 
+                        />
+                        <View style={styles.transportChip}>
+                          <TextSmall style={[styles.transportChipText]}>
+                            {step.line_name || ''}
+                          </TextSmall>
+                        </View>
+                        <TextSmall style={[styles.transportText]}>
+                          {step.departure_time} 탑승
+                        </TextSmall>
+                      </View>
+                      <TextMedium style={[styles.timelineLocation]}>
+                        {step.departure_stop} 정류장
+                      </TextMedium>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.timelineItem}>
+                    <View style={styles.timelineContent}>
+                      <View style={{flexDirection: "row", alignItems: "center", marginLeft: 24}}>
+                        <DynamicIcon name="clock" size={16} color="#1D72E8" style={{marginRight: 10}} />
+                        <TextSmall style={styles.transportText}>
+                          {step.duration_text} 소요 • {step.num_stops}개 정류장
+                        </TextSmall>
+                      </View>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.timelineItem}>
+                    <View style={styles.timelineContent}>
+                      <View style={{flexDirection: "row", alignItems: "center"}}>
+                        <View style={[styles.timelineDot, {backgroundColor: "#ffffff"}]}>
+                          {index < ((route.steps?.length ?? 0) - 2) ? (
+                            <DynamicIcon name="repeat" size={16} color="#A16207" />
+                          ) : (
+                            <DynamicIcon name="log-out" size={16} color="#1D72E8" />
+                          )}
+                        </View>
+                        <TextMedium style={[styles.timelineTime, {marginRight: 4}]}>
+                          {step.arrival_time}
+                        </TextMedium>
+                        <View style={styles.transferChip}>
+                          <TextSmall style={[styles.transferChipText]}>
+                            {index < ((route.steps?.length ?? 0) - 2) ? "환승" : "하차"}
+                          </TextSmall>
+                        </View>
+                      </View>
+                      <TextMedium style={[styles.timelineLocation]}>
+                        {step.arrival_stop}
+                      </TextMedium>
+                    </View>
+                  </View>
+                </>
+              )}
+            </React.Fragment>
+          );
+        })}
+        
+        {/* 도착 */}
+        <View style={styles.timelineItem}>
+          <View style={styles.timelineContent}>
+            <View style={{flexDirection: "row", alignItems: "center"}}>
+              <View style={styles.timelineDot}>
+                <View style={styles.redDotSmall} />
+              </View>
+              <TextMedium style={[styles.timelineTime, {marginRight: 4}]}>
+                {formatTime(route.arrivalTime)}
+              </TextMedium>
+              <View style={styles.arrivalChip}>
+                <TextSmall style={[styles.arrivalChipText]}>도착</TextSmall>
+              </View>
+            </View>
+            <TextMedium style={[styles.timelineLocation]}>
+              {destination?.name || "목적지"}
+            </TextMedium>
+          </View>
+        </View>
+      </>
+    );
   };
 
   // 날씨 정보
@@ -270,10 +509,61 @@ export default function ResultScreen() {
             <View style={styles.mapSection}>
               <TextXLarge style={styles.sectionTitle}>경로 지도</TextXLarge>
               <View style={styles.map}>
-                {/* 이 부분은 실제 지도 컴포넌트로 대체해야 합니다 */}
-                <View style={styles.mapPlaceholder}>
-                  {/* 이미지나 지도 컴포넌트 */}
-                </View>
+                <MapView
+                  showsUserLocation={true}
+                  showsMyLocationButton={true}
+                  provider={PROVIDER_GOOGLE}
+                  style={styles.mapPlaceholder}
+                  region={{
+                    latitude: origin?.coordinates.latitude || 37.5665,
+                    longitude: origin?.coordinates.longitude || 126.9780,
+                    latitudeDelta: 0.05,
+                    longitudeDelta: 0.05,
+                  }}
+                  customMapStyle={mapStyle} // 사용자 정의 지도 스타일 적용
+                >
+                  {/* 출발지 마커 */}
+                  {origin && (
+                    <Marker
+                      coordinate={{
+                        latitude: origin.coordinates.latitude,
+                        longitude: origin.coordinates.longitude,
+                      }}
+                      title="출발지"
+                      description={origin.name}
+                      pinColor="#1B72E8"
+                    />
+                  )}
+                  
+                  {/* 도착지 마커 */}
+                  {destination && (
+                    <Marker
+                      coordinate={{
+                        latitude: destination.coordinates.latitude,
+                        longitude: destination.coordinates.longitude,
+                      }}
+                      title="도착지"
+                      description={destination.name}
+                      pinColor="#EA4335"
+                    />
+                  )}
+                  
+                  {/* 경로 폴리라인 */}
+                  {route?.steps && route.steps.map((step, index) => (
+                    <React.Fragment key={`polyline-${index}`}>
+                      {step.start_location && step.end_location && (
+                        <Polyline
+                          coordinates={[
+                            ...decodePolygon(step.polyline || ""),
+                          ]}
+                          strokeColor={step.mode === 'WALKING' ? '#2563EB' : getPolylineColor(step.vehicle_type)}
+                          strokeWidth={5}
+                          fillColor={step.mode === 'WALKING' ? '#2563EB' : getPolylineColor(step.vehicle_type)}
+                        />
+                      )}
+                    </React.Fragment>
+                  ))}
+                </MapView>
               </View>
 
               <View style={styles.routeInfo}>
@@ -287,10 +577,27 @@ export default function ResultScreen() {
                       {origin?.name || "현재 위치"}
                     </TextMedium>
                     <TextSmall style={[styles.locationDesc]}>
-                      {/* {origin?.address || ""} */} {/* reverseGeocodeAsync 필요 */}
+                      {route?.steps && route.steps.length > 0 ? route.steps[0].instruction : ""}
                     </TextSmall>
                   </View>
                 </View>
+                
+                {route?.steps && route.steps.filter(step => step.mode === 'TRANSIT').map((transitStep, index) => (
+                  <View key={`transit-${index}`} style={styles.locationItem}>
+                    <View style={styles.yellowDot} />
+                    <View>
+                      <TextMedium style={[styles.locationTitle]}>
+                        {getTransportTypeText(transitStep.vehicle_type)} {transitStep.line_name}
+                      </TextMedium>
+                      <TextMedium style={[styles.locationName]}>
+                        {transitStep.departure_stop} → {transitStep.arrival_stop}
+                      </TextMedium>
+                      <TextSmall style={[styles.locationDesc]}>
+                        {transitStep.departure_time} 출발 • {transitStep.duration_text} 소요 • {transitStep.arrival_time} 도착
+                      </TextSmall>
+                    </View>
+                  </View>
+                ))}
 
                 <View style={[styles.locationItem, { marginBottom: 0 }]}>
                   <View style={styles.redDot} />
@@ -302,7 +609,9 @@ export default function ResultScreen() {
                       {destination?.name || "목적지"}
                     </TextMedium>
                     <TextSmall style={[styles.locationDesc]}>
-                      {/* {destination?.address || ""} */} {/* reverseGeocodeAsync 필요 */}
+                      {route?.steps && route.steps.length > 0 ? 
+                        route.steps[route.steps.length - 1].instruction : 
+                        ""}
                     </TextSmall>
                   </View>
                 </View>
@@ -311,96 +620,7 @@ export default function ResultScreen() {
 
             <View style={styles.detailSection}>
               <TextXLarge style={styles.sectionTitle}>상세 이동 정보</TextXLarge>
-              <View style={styles.timelineItem}>
-                <View style={styles.timelineContent}>
-                  <View style={{flexDirection: "row", alignItems: "center"}}>
-                    <View style={styles.timelineDot}>
-                      <View style={styles.blueDotSmall} />
-                    </View>
-                    <TextMedium style={[styles.timelineTime, {marginRight: 4}]}>
-                      {route ? formatTime(route.departureTime) : "--:--"}
-                    </TextMedium>
-                    <View style={styles.routeChip}>
-                      <TextSmall style={[styles.chipText]}>출발</TextSmall>
-                    </View>
-                  </View>
-                  <TextMedium style={[styles.timelineLocation]}>
-                    {origin?.name || "현재 위치"}
-                  </TextMedium>
-                </View>
-              </View>
-
-              <View style={styles.timelineItem}>
-                <View style={styles.timelineContent}>
-                  <View style={{flexDirection: "row", alignItems: "center"}}>
-                    <DynamicIcon name="truck" size={16} color="#1D72E8" style={{marginHorizontal:14}} />
-                    <View style={styles.transportChip}>
-                      <TextSmall style={[styles.transportChipText]}>
-                        {route?.steps ? route.steps.find((s: RouteStep) => s.mode === "TRANSIT")?.line_name : "버스/열차"} 
-                      </TextSmall>
-                    </View>
-                    <TextSmall style={[styles.transportText]}>탑승</TextSmall>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.timelineItem}>
-                <View style={styles.timelineContent}>
-                  <View style={{flexDirection: "row", alignItems: "center"}}>
-                    <View style={[styles.timelineDot, {backgroundColor: "#ffffff"}]}>
-                      <DynamicIcon name="arrow-right" size={16} color="#1D72E8" />
-                    </View>
-                    <TextMedium style={[styles.timelineTime, {marginRight: 4}]}>
-                      {route
-                        ? formatTime(
-                            new Date(
-                              new Date(route.departureTime).getTime() +
-                                (route.duration / 2) * 1000
-                            ).toISOString()
-                          )
-                        : "--:--"}
-                    </TextMedium>
-                    <View style={styles.transferChip}>
-                      <TextSmall style={[styles.transferChipText]}>
-                        환승 지점
-                      </TextSmall>
-                    </View>
-                  </View>
-                  <TextMedium style={[styles.timelineLocation]}>
-                    {route?.steps ? route.steps.find((s: RouteStep) => s.mode === "TRANSIT")?.arrival_stop : "환승 센터"}
-                  </TextMedium>
-                </View>
-              </View>
-
-              <View style={styles.timelineItem}>
-                
-                <View style={styles.timelineContent}>
-                  <View style={{flexDirection: "row", alignItems: "center"}}>
-                    <View style={styles.timelineDot}>
-                      <View style={styles.redDotSmall} />
-                    </View>
-                    <TextMedium style={[styles.timelineTime, {marginRight: 4}]}>
-                      {route ? formatTime(route.arrivalTime) : "--:--"}
-                    </TextMedium>
-                    <View style={styles.arrivalChip}>
-                      <TextSmall style={[styles.arrivalChipText]}>도착</TextSmall>
-                    </View>
-                  </View>
-                  <TextMedium style={[styles.timelineLocation]}>
-                    {destination?.name || "목적지"}
-                  </TextMedium>
-                </View>
-              </View>
-
-              <View style={styles.totalTimeContainer}>
-                <DynamicIcon name="map" size={12} color="#1D72E8" />
-                <TextMedium style={[styles.totalTime]}>
-                  총 이동 시간:{" "}
-                  {route
-                    ? `약 ${Math.round(route.duration / 60)}분`
-                    : "계산 중..."}
-                </TextMedium>
-              </View>
+              {renderDetailedTimeline()}
             </View>
           </View>
         </ScrollView>
@@ -521,7 +741,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   map: {
-    height: 200,
+    height: 500,
     backgroundColor: "#E8EBEF",
     borderRadius: 12,
     marginBottom: 10,
@@ -557,6 +777,13 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 8,
     backgroundColor: "#EA4335",
+    marginRight: 12,
+  },
+  yellowDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#FFC107",
     marginRight: 12,
   },
   locationTitle: {
@@ -647,6 +874,18 @@ const styles = StyleSheet.create({
   },
   transferChipText: {
     color: "#A16207",
+    fontFamily: "Pretendard_Bold",
+  },
+  walkingChip: {
+    backgroundColor: "#DBEAFE",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    borderColor: "#93C5FD",
+    borderWidth: 1,
+  },
+  walkingChipText: {
+    color: "#2563EB",
     fontFamily: "Pretendard_Bold",
   },
   arrivalChip: {
