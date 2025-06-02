@@ -1,13 +1,17 @@
+// components/ArrivalTimeModal.tsx
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   Pressable,
   StyleSheet,
+  Text, // renderItem 안에서 쓰기 위해 import
 } from 'react-native';
 import Modal from 'react-native-modal';
 import { Calendar } from 'react-native-calendars';
 import WheelPicker from '@quidone/react-native-wheel-picker';
+import { useFontSize } from '@hooks/useFontSize';
+import { TextSize } from '@components/TextSize';
 
 type Props = {
   visible: boolean;
@@ -27,20 +31,20 @@ export default function ArrivalTimeModal({
   const now = new Date();
   const defaultDate = initial ?? now;
 
+  // useFontSize 훅으로 현재 설정된 폰트 크기를 가져옴
+  const { getSize } = useFontSize();
+
   const [selectedDate, setSelectedDate] = useState<Date>(defaultDate);
   const [period, setPeriod] = useState<'AM' | 'PM'>(
     defaultDate.getHours() < 12 ? 'AM' : 'PM'
   );
-  const [hour, setHour] = useState<number>(
-    defaultDate.getHours() % 12 || 12
-  );
-  const [minute, setMinute] = useState<number>(
-    defaultDate.getMinutes()
-  );
+  const [hour, setHour] = useState<number>(defaultDate.getHours() % 12 || 12);
+  const [minute, setMinute] = useState<number>(defaultDate.getMinutes());
   const [activeTab, setActiveTab] = useState<'date' | 'time' | null>(null);
 
   useEffect(() => {
     if (!visible) {
+      // 모달이 닫히면 상태 초기화
       setActiveTab(null);
       setSelectedDate(defaultDate);
       setPeriod(defaultDate.getHours() < 12 ? 'AM' : 'PM');
@@ -52,7 +56,7 @@ export default function ArrivalTimeModal({
   const handleConfirmAll = () => {
     const d = new Date(selectedDate);
     let h24 = hour % 12 + (period === 'PM' ? 12 : 0);
-    if (h24 === 24) h24 = 12;
+    if (h24 === 24) h24 = 12; // 12 AM/PM 예외 처리
     d.setHours(h24, minute, 0, 0);
     onConfirm(d);
     onCancel();
@@ -62,6 +66,7 @@ export default function ArrivalTimeModal({
     setSelectedDate(new Date(day.timestamp));
   };
 
+  // Picker 데이터 정의
   const periodItems: PickerItem<'AM' | 'PM'>[] = [
     { label: '오전', value: 'AM' },
     { label: '오후', value: 'PM' },
@@ -86,18 +91,34 @@ export default function ArrivalTimeModal({
       style={styles.modal}
     >
       <View style={styles.container}>
-        <Text style={styles.header}>도착 시간 설정</Text>
+        {/* 헤더: TextSize로 동적 폰트 크기 적용 */}
+        <TextSize size="xlarge" style={styles.header}>
+          도착 시간 설정
+        </TextSize>
+
         <View style={styles.fieldRow}>
+          {/* 날짜 필드 */}
           <Pressable style={styles.field} onPress={() => setActiveTab('date')}>
-            <Text style={styles.fieldLabel}>날짜</Text>
-            <Text style={styles.fieldValue}>{dateText}</Text>
+            <TextSize size="small" style={styles.fieldLabel}>
+              날짜
+            </TextSize>
+            <TextSize size="normal" style={styles.fieldValue}>
+              {dateText}
+            </TextSize>
           </Pressable>
+
+          {/* 시간 필드 */}
           <Pressable style={styles.field} onPress={() => setActiveTab('time')}>
-            <Text style={styles.fieldLabel}>시간</Text>
-            <Text style={styles.fieldValue}>{timeText}</Text>
+            <TextSize size="small" style={styles.fieldLabel}>
+              시간
+            </TextSize>
+            <TextSize size="normal" style={styles.fieldValue}>
+              {timeText}
+            </TextSize>
           </Pressable>
         </View>
 
+        {/* 날짜 선택 캘린더 */}
         {activeTab === 'date' && (
           <Calendar
             minDate={now.toISOString().split('T')[0]}
@@ -111,13 +132,19 @@ export default function ArrivalTimeModal({
             theme={{
               todayTextColor: '#4169E1',
               arrowColor: '#4169E1',
+              // 달력 내부 글꼴 크기도 동적으로 조절
+              textDayFontSize: getSize('normal'),
+              textMonthFontSize: getSize('large'),
+              textDayHeaderFontSize: getSize('small'),
             }}
             style={styles.calendar}
           />
         )}
 
+        {/* 시간 선택 다이얼 */}
         {activeTab === 'time' && (
           <View style={styles.wheelSection}>
+            {/* 오전/오후 Picker */}
             <WheelPicker
               data={periodItems}
               value={period}
@@ -130,8 +157,25 @@ export default function ArrivalTimeModal({
               onValueChanged={({ item }: { item: PickerItem<'AM' | 'PM'> }) =>
                 setPeriod(item.value)
               }
+              // renderItem을 통해 선택된 아이템만 크게, 나머지는 기본 크기로 렌더링
+              renderItem={({ item }: { item: PickerItem<'AM' | 'PM'> }) => (
+                <Text
+                  style={{
+                    fontSize:
+                      item.value === period
+                        ? getSize('large')
+                        : getSize('normal'),
+                    textAlign: 'center',
+                  }}
+                >
+                  {item.label}
+                </Text>
+              )}
             />
+
             <View style={{ width: 16 }} />
+
+            {/* 시(hour) Picker */}
             <WheelPicker
               data={hourItems}
               value={hour}
@@ -144,8 +188,25 @@ export default function ArrivalTimeModal({
               onValueChanged={({ item }: { item: PickerItem<number> }) =>
                 setHour(item.value)
               }
+              renderItem={({ item }: { item: PickerItem<number> }) => (
+                <Text
+                  style={{
+                    fontSize:
+                      item.value === hour ? getSize('large') : getSize('normal'),
+                    textAlign: 'center',
+                  }}
+                >
+                  {item.label}
+                </Text>
+              )}
             />
-            <Text style={styles.colon}>:</Text>
+
+            {/* 콜론(:) */}
+            <TextSize size="large" style={styles.colon}>
+              :
+            </TextSize>
+
+            {/* 분(minute) Picker */}
             <WheelPicker
               data={minuteItems}
               value={minute}
@@ -158,12 +219,28 @@ export default function ArrivalTimeModal({
               onValueChanged={({ item }: { item: PickerItem<number> }) =>
                 setMinute(item.value)
               }
+              renderItem={({ item }: { item: PickerItem<number> }) => (
+                <Text
+                  style={{
+                    fontSize:
+                      item.value === minute
+                        ? getSize('large')
+                        : getSize('normal'),
+                    textAlign: 'center',
+                  }}
+                >
+                  {item.label}
+                </Text>
+              )}
             />
           </View>
         )}
 
+        {/* 확인 버튼 */}
         <Pressable style={styles.confirmBtn} onPress={handleConfirmAll}>
-          <Text style={styles.confirmText}>확인</Text>
+          <TextSize size="medium" style={styles.confirmText}>
+            확인
+          </TextSize>
         </Pressable>
       </View>
     </Modal>
@@ -182,7 +259,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   header: {
-    fontSize: 18,
     fontWeight: '600',
     padding: 16,
   },
@@ -224,7 +300,6 @@ const styles = StyleSheet.create({
     marginVertical: 12,
   },
   colon: {
-    fontSize: 24,
     fontWeight: 'bold',
     marginHorizontal: 8,
   },
@@ -235,7 +310,6 @@ const styles = StyleSheet.create({
   },
   confirmText: {
     color: '#fff',
-    fontSize: 16,
     fontWeight: '600',
   },
 });
