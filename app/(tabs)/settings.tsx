@@ -78,10 +78,10 @@ export default function SettingsScreen() {
         </View>
 
         {/* 기타 */}
-        <View style={styles.card}>
+        {/* <View style={styles.card}>
           <TextMedium style={[styles.label, { marginBottom: 16 }]}>{t('helpFaq')}</TextMedium>
           <TextMedium style={styles.label}>{t('about')}</TextMedium>
-        </View>
+        </View> */}
       </ScrollView>
     </SafeAreaView>
   );
