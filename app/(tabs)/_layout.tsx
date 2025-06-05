@@ -1,10 +1,12 @@
 import { useFontSize } from '@hooks/useFontSize';
+import { useTranslation } from '@hooks/useTranslation';
 import Feather from '@expo/vector-icons/Feather';
 import { Tabs } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
   const { getSize } = useFontSize();
+  const { t } = useTranslation();
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff', }} edges={['bottom']}>
@@ -37,21 +39,21 @@ export default function TabLayout() {
         <Tabs.Screen
           name="explore"
           options={{
-            title: '경로 탐색',
+            title: t('explore'),
             headerShown: false,
           }}
         />
         <Tabs.Screen
           name="favorite"
           options={{
-            title: '즐겨찾기',
+            title: t('favorite'),
             headerShown: false,
           }}
         />
         <Tabs.Screen
           name="settings"
           options={{
-            title: '설정',
+            title: t('tabSettings'),
             headerShown: false,
           }}
         />

@@ -18,6 +18,7 @@ module.exports = defineConfig([
             ['@store', './store'],
             ['@services', './services'],
             ['@hooks', './hooks'],
+            ['@constants', './constants'],
           ],
           extensions: ['.js', '.jsx', '.ts', '.tsx'],
         },
