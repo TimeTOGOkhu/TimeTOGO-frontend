@@ -51,7 +51,7 @@ interface CalculateRouteParams {
 }
 
 // Lambda 함수 API 엔드포인트
-const API_BASE_URL = 'http://172.21.65.108:5001/mock';
+const API_BASE_URL = 'http://192.168.0.15:5001/lambda';
 
 const fetchWithTimeout = async (url: string, options = {}, timeout = 5000) => {
   const controller = new AbortController();
