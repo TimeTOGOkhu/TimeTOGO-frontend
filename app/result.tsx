@@ -760,7 +760,7 @@ const styles = StyleSheet.create({
   },
   mapPlaceholder: {
     width: "100%",
-    height: 600,
+    height: 580,
     backgroundColor: "#DEEBFF",
   },
   routeInfo: {
