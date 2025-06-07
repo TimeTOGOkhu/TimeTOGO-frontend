@@ -15,6 +15,7 @@ import PressableOpacity from "@/components/PressableOpacity";
 import { useCalculationStore, Location as StoreLocation } from '@store/calculationStore';
 import { calculateRoute } from '@services/routeService';
 import Svg, { Circle } from 'react-native-svg';
+import { useFavoriteStore } from '@store/favoriteStore';
 
 export default function ExploreScreen() {
   const [locationPermission, setLocationPermission] = useState(false);
@@ -129,7 +130,44 @@ export default function ExploreScreen() {
       
       // 도착 시간을 유닉스 타임스탬프로 변환
       const arrivalUnixTime = Math.floor(arrival!.getTime() / 1000).toString();
-      
+      // 1) 계산 시작
+      store.startCalculation();
+
+      // 2) 경로 계산 → 결과와 날씨 반환
+      const result = await calculateRoute({
+        origin: getLocationString(origin),
+        destination: getLocationString(destination),
+        arrival_time: arrivalUnixTime,
+      });
+
+      // null 체크
+      if (!result.route || !result.weather) {
+        Alert.alert(
+          '오류',
+          '경로 또는 날씨 정보를 가져오는 데 실패했습니다.',
+          [{ text: '확인' }]
+        );
+        store.setLoadingFinished();  // 로딩 상태 해제
+        return;
+      }
+
+      const { route, weather } = result;
+
+      // 이제 route 타입이 RouteInfo 로 좁혀집니다.
+      store.setRoute(route);
+      store.setWeather(weather);
+      store.setLoadingFinished();
+
+      // 4) 즐겨찾기에 저장
+      useFavoriteStore.getState().addFavorite({
+        origin: getLocationString(origin),
+        destination: getLocationString(destination),
+        travelTime: route.duration, // 초 단위
+      });
+
+      // 5) 결과 화면으로 이동
+      router.navigate('../result');
+      /*
       // 계산 시작 및 결과 페이지로 이동
       store.startCalculation();
       router.navigate('../result');
@@ -143,6 +181,7 @@ export default function ExploreScreen() {
         console.error('경로 계산 오류:', error);
         // 오류는 store.setCalculationError에서 이미 처리됨
       });
+      */
     } catch (error) {
       console.error('경로 계산 초기화 오류:', error);
       Alert.alert('오류', '경로 계산을 시작할 수 없습니다.');
