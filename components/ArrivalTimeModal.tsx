@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Pressable,
   StyleSheet,
   Text, // renderItem 안에서 쓰기 위해 import
 } from 'react-native';
@@ -11,7 +10,15 @@ import Modal from 'react-native-modal';
 import { Calendar } from 'react-native-calendars';
 import WheelPicker from '@quidone/react-native-wheel-picker';
 import { useFontSize } from '@hooks/useFontSize';
-import { TextSize } from '@components/TextSize';
+import {
+TextSmall,
+TextMedium,
+TextXLarge,
+TextXXXLarge,
+TextNormal,
+TextLarge,
+} from "@components/TextSize";
+import PressableOpacity from "@/components/PressableOpacity";
 
 type Props = {
   visible: boolean;
@@ -92,30 +99,30 @@ export default function ArrivalTimeModal({
     >
       <View style={styles.container}>
         {/* 헤더: TextSize로 동적 폰트 크기 적용 */}
-        <TextSize size="xlarge" style={styles.header}>
+        <TextXLarge style={styles.header}>
           도착 시간 설정
-        </TextSize>
+        </TextXLarge>
 
         <View style={styles.fieldRow}>
           {/* 날짜 필드 */}
-          <Pressable style={styles.field} onPress={() => setActiveTab('date')}>
-            <TextSize size="small" style={styles.fieldLabel}>
+          <PressableOpacity style={styles.field} onPress={() => setActiveTab('date')}>
+            <TextSmall style={styles.fieldLabel}>
               날짜
-            </TextSize>
-            <TextSize size="normal" style={styles.fieldValue}>
+            </TextSmall>
+            <TextNormal style={styles.fieldValue}>
               {dateText}
-            </TextSize>
-          </Pressable>
+            </TextNormal>
+          </PressableOpacity>
 
           {/* 시간 필드 */}
-          <Pressable style={styles.field} onPress={() => setActiveTab('time')}>
-            <TextSize size="small" style={styles.fieldLabel}>
+          <PressableOpacity style={styles.field} onPress={() => setActiveTab('time')}>
+            <TextSmall style={styles.fieldLabel}>
               시간
-            </TextSize>
-            <TextSize size="normal" style={styles.fieldValue}>
+            </TextSmall>
+            <TextNormal style={styles.fieldValue}>
               {timeText}
-            </TextSize>
-          </Pressable>
+            </TextNormal>
+          </PressableOpacity>
         </View>
 
         {/* 날짜 선택 캘린더 */}
@@ -202,9 +209,9 @@ export default function ArrivalTimeModal({
             />
 
             {/* 콜론(:) */}
-            <TextSize size="large" style={styles.colon}>
+            <TextLarge style={styles.colon}>
               :
-            </TextSize>
+            </TextLarge>
 
             {/* 분(minute) Picker */}
             <WheelPicker
@@ -237,11 +244,11 @@ export default function ArrivalTimeModal({
         )}
 
         {/* 확인 버튼 */}
-        <Pressable style={styles.confirmBtn} onPress={handleConfirmAll}>
-          <TextSize size="medium" style={styles.confirmText}>
+        <PressableOpacity style={styles.confirmBtn} onPress={handleConfirmAll}>
+          <TextMedium style={styles.confirmText}>
             확인
-          </TextSize>
-        </Pressable>
+          </TextMedium>
+        </PressableOpacity>
       </View>
     </Modal>
   );
