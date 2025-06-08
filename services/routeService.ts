@@ -105,24 +105,13 @@ export const calculateRoute = async (params: CalculateRouteParams, origin: Store
     let data: RouteResponse;
     
     try {
-      // 1. 람다 응답이 이미 객체인 경우
-      if (lambdaResponse.steps) {
+      if (typeof lambdaResponse === 'string') {
+        // 문자열로 온 경우 (예: "\"{ \\\"steps\\\": [...] }\"" 같은)
+        data = JSON.parse(lambdaResponse) as RouteResponse;
+      } else {
+        // 이미 객체 형태로 온 경우
         data = lambdaResponse as RouteResponse;
       }
-      // 2. 람다 응답이 body 프로퍼티를 가진 경우
-      else if (lambdaResponse.body) {
-        // 2-1. body가 문자열인 경우, 파싱 시도
-        if (typeof lambdaResponse.body === 'string') {
-          data = JSON.parse(lambdaResponse.body);
-        } 
-        // 2-2. body가 이미 객체인 경우
-        else {
-          data = lambdaResponse.body as RouteResponse;
-        }
-      } else {
-        throw new Error('알 수 없는 응답 형식');
-      }
-      
       if (!data || !data.steps || data.steps.length === 0) {
         throw new Error('유효한 경로 데이터가 없습니다');
       }
