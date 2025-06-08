@@ -1,5 +1,6 @@
 // API 호출을 위한 서비스 구현
 import { useCalculationStore } from '@store/calculationStore';
+import { useHistoryStore } from '@store/historyStore';
 import { LatLng } from 'react-native-maps';
 
 // 람다 함수 응답 타입 정의
@@ -180,6 +181,12 @@ export const calculateRoute = async (params: CalculateRouteParams) => {
     store.setRoute(routeInfo);
     store.setWeather(weatherInfo);
     store.setLoadingFinished();
+
+    useHistoryStore.getState().addHistory({
+      origin: params.origin,
+      destination: params.destination,
+      travelTime: routeInfo.duration,
+    });
 
     // 3) 직접 만든 객체를 반환하면 null 체크를 걱정할 필요가 없습니다
     return {

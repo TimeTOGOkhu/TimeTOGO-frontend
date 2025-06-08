@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import {
   SafeAreaView,
   View,
-  ScrollView,
+  FlatList, // ScrollView 대신 FlatList import
   StyleSheet,
   Pressable,
   Text,
@@ -12,75 +12,84 @@ import {
 import {
   TextSmall,
   TextMedium,
-  TextXLarge,
 } from '@components/TextSize';
 import { DynamicIcon } from '@components/DynamicIcon';
 import { useHistoryStore } from '@/store/historyStore';
-import { useCalculationStore } from '@store/calculationStore';
 import { useFontSize } from '@hooks/useFontSize';
 import { useTranslation } from '@hooks/useTranslation';
 
 export default function HistoryScreen() {
   const historys = useHistoryStore((s) => s.historys);
   const removeHistory = useHistoryStore((s) => s.removeHistory);
-  const setOrigin = useCalculationStore((s) => s.setOrigin);
-  const setDestination = useCalculationStore((s) => s.setDestination);
   const { getSize } = useFontSize();
 
   const { t } = useTranslation();
 
   const applyHistory = (item: typeof historys[0]) => {
-    // 문자열로 저장했던 좌표를 파싱하거나, 필요에 따라
-    // StoreLocation 형태로 다시 셋업해 주세요.
-    // 예시: setOrigin({ name: item.origin, coordinates: { ... } });
-    // setDestination(...)
+    // TODO: setOrigin, setDestination을 사용하여 출발지/도착지 설정 로직 구현 필요
+    // 예시: 
+    // if (item.originCoords && item.destinationCoords) {
+    //   setOrigin({ name: item.origin, coordinates: item.originCoords });
+    //   setDestination({ name: item.destination, coordinates: item.destinationCoords });
+    // }
     router.push('/explore');
   };
+
+  // FlatList renderItem 함수
+  const renderHistoryItem = ({ item, index }: { item: typeof historys[0], index: number }) => (
+    <View style={styles.card}>
+      {/* 카드 헤더: 제목 + 아이콘 */}
+      <View style={styles.cardHeader}>
+        <TextMedium style={{ fontSize: getSize('large') }}>
+          {t('historyRouteTitle') + ` ${index + 1}`}
+        </TextMedium>
+        <View style={styles.headerIcons}>
+          <Pressable onPress={() => applyHistory(item)}>
+            <DynamicIcon
+              name="share"
+              size={getSize('normal')}
+              style={styles.icon}
+            />
+          </Pressable>
+          <Pressable onPress={() => removeHistory(index)}>
+            <DynamicIcon
+              name="x"
+              size={getSize('normal')}
+              style={styles.icon}
+            />
+          </Pressable>
+        </View>
+      </View>
+
+      {/* 경로 정보 */}
+      <TextMedium style={[styles.routeText, { fontSize: getSize('medium') }]}>
+        {item.origin} → {item.destination}
+      </TextMedium>
+      <TextSmall style={[styles.infoText, { fontSize: getSize('small') }]}>
+        {t('historyTravelTime')}: {Math.round(item.travelTime / 60)} {t('minutes')}
+      </TextSmall>
+      <TextSmall style={[styles.applyText, { fontSize: getSize('small') }]}>
+        {t('historyApplyText')}
+      </TextSmall>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Text style={styles.title}>{t('history')}</Text>
       </View>
-      <ScrollView contentContainerStyle={styles.list}>
-        {historys.map((item, idx) => (
-          <View key={`${item.origin}-${item.destination}`} style={styles.card}>
-            {/* 카드 헤더: 제목 + 아이콘 */}
-            <View style={styles.cardHeader}>
-              <TextMedium style={{ fontSize: getSize('large') }}>
-                경로 {idx + 1}
-              </TextMedium>
-              <View style={styles.headerIcons}>
-                <Pressable onPress={() => applyHistory(item)}>
-                  <DynamicIcon
-                    name="share"
-                    size={getSize('normal')}
-                    style={styles.icon}
-                  />
-                </Pressable>
-                <Pressable onPress={() => removeHistory(idx)}>
-                  <DynamicIcon
-                    name="x"
-                    size={getSize('normal')}
-                    style={styles.icon}
-                  />
-                </Pressable>
-              </View>
-            </View>
-
-            {/* 경로 정보 */}
-            <TextMedium style={[styles.routeText, { fontSize: getSize('medium') }]}>
-              {item.origin} → {item.destination}
-            </TextMedium>
-            <TextSmall style={[styles.infoText, { fontSize: getSize('small') }]}>
-              평균 {Math.round(item.travelTime / 60)}분 소요
-            </TextSmall>
-            <TextSmall style={[styles.applyText, { fontSize: getSize('small') }]}>
-              클릭하여 적용
-            </TextSmall>
+      <FlatList // ScrollView 대신 FlatList 사용
+        data={historys}
+        renderItem={renderHistoryItem}
+        keyExtractor={(item, index) => `${item.origin}-${item.destination}-${index}`} // 고유 key 보강
+        contentContainerStyle={styles.list}
+        ListEmptyComponent={ // 히스토리가 없을 때 표시할 컴포넌트
+          <View style={styles.emptyContainer}>
+            <TextMedium style={styles.emptyText}>{t('noHistory')}</TextMedium>
           </View>
-        ))}
-      </ScrollView>
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -102,6 +111,7 @@ const styles = StyleSheet.create({
   },
   list: {
     padding: 16,
+    flexGrow: 1, // FlatList 내용이 적을 때도 중앙 정렬 등을 위해 추가
   },
   card: {
     borderWidth: 1,
@@ -122,4 +132,12 @@ const styles = StyleSheet.create({
   routeText: { marginBottom: 4, color: '#333' },
   infoText: { color: '#666', marginBottom: 4 },
   applyText: { color: '#999' },
+  emptyContainer: { // 히스토리가 없을 때 스타일
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: '#888',
+  },
 });
