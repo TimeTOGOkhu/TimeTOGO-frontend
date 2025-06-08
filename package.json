@@ -58,6 +58,7 @@
     "@babel/core": "^7.25.2",
     "@types/react": "~19.0.10",
     "@types/react-native": "^0.73.0",
+    "@types/react-native-global-props": "^1.1.6",
     "babel-plugin-module-resolve": "^1.7.0",
     "babel-plugin-module-resolver": "^5.0.2",
     "eslint": "^9.25.0",

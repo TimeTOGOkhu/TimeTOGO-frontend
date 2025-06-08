@@ -1,20 +1,20 @@
-import { Text, View, Switch, ScrollView, TextInput, StyleSheet, Pressable } from 'react-native';
+import { Text, View, Switch, ScrollView, TextInput, StyleSheet } from 'react-native';
 import { TextMedium } from '@components/TextSize';
+import LanguageDropdown from '@components/LanguageDropdown';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { useSettingsStore } from '@store/settingsStore';
-import { useFontSize } from '@hooks/useFontSize';
+import { useTranslation } from '@hooks/useTranslation';
 
 export default function SettingsScreen() {
   const [isNotificationEnabled, setIsNotificationEnabled] = useState(true);
   const [extraTime, setExtraTime] = useState('5');
   
   // Zustand 설정 스토어
-  const fontSize = useSettingsStore(state => state.fontSize);
-  const setFontSize = useSettingsStore(state => state.setFontSize);
+  const { fontSize, setFontSize } = useSettingsStore();
   
-  // 폰트 크기 유틸리티 
-  const { getSize } = useFontSize();
+  // 다국어 지원
+  const { t } = useTranslation();
   
   // 더 큰 텍스트 토글 상태
   const [isLargeText, setIsLargeText] = useState(fontSize === 'large');
@@ -33,78 +33,30 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerText}>설정</Text>
+        <Text style={styles.headerText}>{t('settings')}</Text>
       </View>
 
       <ScrollView style={{ padding: 16 }}>
         {/* 큰 텍스트 */}
         <View style={styles.card}>
           <View style={styles.row}>
-            <TextMedium style={styles.label}>더 큰 텍스트</TextMedium>
+            <TextMedium style={styles.label}>{t('largeText')}</TextMedium>
             <Switch 
               value={isLargeText} 
               onValueChange={handleToggleLargeText}
             />
           </View>
 
-          {/* 
           <View style={[styles.row, { marginTop: 16 }]}>
-            <TextMedium style={styles.label}>글꼴 크기</TextMedium>
-            <View style={styles.fontSizeSelector}>
-              <Pressable 
-                style={[
-                  styles.fontSizeButton, 
-                  fontSize === 'small' && styles.selectedFontSize
-                ]}
-                onPress={() => setFontSize('small')}
-              >
-                <Text style={[styles.fontSizeText, fontSize === 'small' && styles.selectedFontSizeText]}>
-                  작게
-                </Text>
-              </Pressable>
-              <Pressable 
-                style={[
-                  styles.fontSizeButton, 
-                  fontSize === 'medium' && styles.selectedFontSize
-                ]}
-                onPress={() => {
-                  setFontSize('medium');
-                  setIsLargeText(false);
-                }}
-              >
-                <Text style={[styles.fontSizeText, fontSize === 'medium' && styles.selectedFontSizeText]}>
-                  보통
-                </Text>
-              </Pressable>
-              <Pressable 
-                style={[
-                  styles.fontSizeButton, 
-                  fontSize === 'large' && styles.selectedFontSize
-                ]}
-                onPress={() => {
-                  setFontSize('large');
-                  setIsLargeText(true);
-                }}
-              >
-                <Text style={[styles.fontSizeText, fontSize === 'large' && styles.selectedFontSizeText]}>
-                  크게
-                </Text>
-              </Pressable>
-            </View>
-          </View> */}
-
-          <View style={[styles.row, { marginTop: 16 }]}>
-            <TextMedium style={styles.label}>언어 선택</TextMedium>
-            <View style={styles.dropdownBox}>
-              <TextMedium>한글 ▼</TextMedium>
-            </View>
+            <TextMedium style={styles.label}>{t('language')}</TextMedium>
+            <LanguageDropdown />
           </View>
         </View>
 
         {/* 알림 설정 */}
         <View style={styles.card}>
           <View style={styles.row}>
-            <TextMedium style={styles.label}>알림 설정</TextMedium>
+            <TextMedium style={styles.label}>{t('notifications')}</TextMedium>
             <Switch value={isNotificationEnabled} onValueChange={setIsNotificationEnabled} />
           </View>
         </View>
@@ -112,7 +64,7 @@ export default function SettingsScreen() {
         {/* 여유 시간 설정 */}
         <View style={styles.card}>
           <View style={styles.row}>
-            <TextMedium style={styles.label}>여유 시간 설정</TextMedium>
+            <TextMedium style={styles.label}>{t('extraTime')}</TextMedium>
             <View style={styles.dropdownBox}>
               <TextInput
                 value={extraTime}
@@ -120,16 +72,16 @@ export default function SettingsScreen() {
                 keyboardType="numeric"
                 style={styles.input}
               />
-              <TextMedium> 분</TextMedium>
+              <TextMedium> {t('minutes')}</TextMedium>
             </View>
           </View>
         </View>
 
         {/* 기타 */}
-        <View style={styles.card}>
-          <TextMedium style={[styles.label, { marginBottom: 16 }]}>Help & FAQ</TextMedium>
-          <TextMedium style={styles.label}>About</TextMedium>
-        </View>
+        {/* <View style={styles.card}>
+          <TextMedium style={[styles.label, { marginBottom: 16 }]}>{t('helpFaq')}</TextMedium>
+          <TextMedium style={styles.label}>{t('about')}</TextMedium>
+        </View> */}
       </ScrollView>
     </SafeAreaView>
   );

@@ -16,11 +16,14 @@ import { useCalculationStore, Location as StoreLocation } from '@store/calculati
 import { calculateRoute } from '@services/routeService';
 import Svg, { Circle } from 'react-native-svg';
 import { useFavoriteStore } from '@store/favoriteStore';
+import { useTranslation } from '@hooks/useTranslation';
 
 export default function ExploreScreen() {
   const [locationPermission, setLocationPermission] = useState(false);
-  const [now, setNow] = useState(new Date());
   const [arrival, setArrival] = useState<Date | null>(null);
+
+  // 번역 함수
+  const { t } = useTranslation();
 
   // 출발지 위치 정보
   const [startLocation, setStartLocation] = useState<StoreLocation| null>(null);
@@ -52,10 +55,10 @@ export default function ExploreScreen() {
 
   // 안내 메시지
   let guideMsg = '';
-  if (!startLocation) guideMsg = '출발지를 선택하세요';
-  else if (!endLocation) guideMsg = '도착지를 선택하세요';
-  else if (!arrival) guideMsg = '도착시간을 선택하세요';
-  else guideMsg = '로고를 클릭하세요';
+  if (!startLocation) guideMsg = t('selectDeparture');
+  else if (!endLocation) guideMsg = t('selectDestination');
+  else if (!arrival) guideMsg = t('selectArrivalTime');
+  else guideMsg = t('clickLogo');
 
   // 동그라미/도넛 투명도
   const getCircleAlpha = (idx: number) => {
@@ -71,9 +74,9 @@ export default function ExploreScreen() {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
-          '위치 권한 필요',
-          '이 앱은 위치 정보가 필요합니다. 설정에서 위치 권한을 허용해주세요.',
-          [{ text: '확인' }],
+          t('locationPermissionNeeded'),
+          t('locationPermissionMessage'),
+          [{ text: t('confirm') }],
         );
         return;
       }
@@ -85,7 +88,7 @@ export default function ExploreScreen() {
         // 현재 위치를 출발지로 설정
         const { latitude, longitude } = location.coords;
         setStartLocation({
-          name: '현재 위치',
+          name: t('currentLocation'),
           coordinates: { latitude, longitude }
         });
 
@@ -93,13 +96,7 @@ export default function ExploreScreen() {
         console.error('위치 정보를 가져오는데 실패했습니다:', error);
       }
     })();
-  }, []);
-
-  // 현재 시간 1초마다 업데이트
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  }, [t]);
 
   const formatKoreanDate = (date: Date) => {
     const y = date.getFullYear();
@@ -124,7 +121,7 @@ export default function ExploreScreen() {
       const destination = store.destination;
       
       if (!origin || !destination) {
-        Alert.alert('오류', '출발지 또는 도착지 정보가 없습니다.');
+        Alert.alert(t('error'), t('missingLocation'));
         return;
       }
       
@@ -184,7 +181,7 @@ export default function ExploreScreen() {
       */
     } catch (error) {
       console.error('경로 계산 초기화 오류:', error);
-      Alert.alert('오류', '경로 계산을 시작할 수 없습니다.');
+      Alert.alert(t('error'), t('routeCalculationInitError'));
     }
   };
 
@@ -239,7 +236,7 @@ export default function ExploreScreen() {
               <LocationInput
                 label=""
                 value={startLocation?.name}
-                placeholder="출발지를 선택하세요"
+                placeholder={t('selectDeparturePlaceholder')}
                 onPress={() => setStartModalVisible(true)}
               />
 
@@ -247,7 +244,7 @@ export default function ExploreScreen() {
               <LocationInput
                 label=""
                 value={endLocation?.name}
-                placeholder="도착지를 선택하세요"
+                placeholder={t('selectDestinationPlaceholder')}
                 onPress={() => setEndModalVisible(true)}
               />
 
@@ -255,7 +252,7 @@ export default function ExploreScreen() {
               <LocationInput
                 label=""
                 value={arrival ? formatKoreanDate(arrival) : ''}
-                placeholder="도착시간을 선택하세요"
+                placeholder={t('selectArrivalTimePlaceholder')}
                 onPress={() => setShowArrivalModal(true)}
               />
             </View>
