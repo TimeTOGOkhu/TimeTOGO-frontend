@@ -6,6 +6,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -22,87 +23,64 @@ import { TransportIcon } from "@components/TransportIcon";
 import PressableOpacity from "@/components/PressableOpacity";
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import { decodePolygon } from "@/services/routeService";
+import * as Location from 'expo-location';
 
-// 노약자와 외국인에게 더 보기 편한 지도 스타일 정의
+// 네이버맵 스타일러 추천 스타일(밝고 심플, 주요 도로/철도/공원/수역 강조, 불필요한 요소 최소화)
 const mapStyle = [
   {
-    "featureType": "all",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      { "color": "#000000" },
-      { "visibility": "on" }
-    ]
-  },
-  {
-    "featureType": "all",
-    "elementType": "labels.text.stroke",
-    "stylers": [
-      { "color": "#ffffff" },
-      { "weight": 3 }
-    ]
-  },
-  {
-    "featureType": "administrative",
+    "featureType": "landscape",
     "elementType": "geometry",
-    "stylers": [
-      { "visibility": "off" }
-    ]
+    "stylers": [{ "color": "#f3f4f6" }]
   },
   {
     "featureType": "poi",
     "elementType": "all",
-    "stylers": [
-      { "visibility": "off" }
-    ]
+    "stylers": [{ "visibility": "off" }]
   },
   {
     "featureType": "road",
     "elementType": "geometry",
-    "stylers": [
-      { "color": "#ffffff" },
-    ]
-  },
-  {
-    "featureType": "road",
-    "elementType": "labels",
-    "stylers": [
-      { "visibility": "simplified" }
-    ]
-  },
-  {
-    "featureType": "transit.station",
-    "elementType": "geometry",
-    "stylers": [
-      { "color": "#d81b60" }  // 지하철/기차역 강조
-    ]
-  },
-  {
-    "featureType": "water",
-    "elementType": "geometry",
-    "stylers": [
-      { "color": "#a0c8f0" }
-    ]
-  },
-  {
-    "featureType": "landscape.natural",
-    "elementType": "geometry",
-    "stylers": [
-      { "color": "#e0f3db" }
-    ]
+    "stylers": [{ "color": "#ffffff" }]
   },
   {
     "featureType": "road.highway",
     "elementType": "geometry",
-    "stylers": [
-      { "color": "#f9b233" }  // 고속도로는 밝은 노란색으로
-    ]
+    "stylers": [{ "color": "#ffe082" }]
   },
   {
     "featureType": "road.arterial",
     "elementType": "geometry",
-    "stylers": [
-      { "color": "#ffd700" }
-    ]
+    "stylers": [{ "color": "#ffe082" }]
+  },
+  {
+    "featureType": "transit.line",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#bdbdbd" }]
+  },
+  {
+    "featureType": "transit.station",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#ff7043" }]
+  },
+  {
+    "featureType": "water",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#b3e5fc" }]
+  },
+  // {
+  //   "featureType": "park",
+  //   "elementType": "geometry",
+  //   "stylers": [{ "color": "#dcedc8" }]
+  // },
+  {
+    "featureType": "administrative",
+    "elementType": "labels.text.fill",
+    "stylers": [{ "color": "#757575" }]
+  },
+  {
+    "featureType": "road",
+    "elementType": "labels.icon",
+    "stylers": [{ "visibility": "off" }]
   }
 ]
 ;
@@ -136,8 +114,75 @@ const getPolylineColor = (vehicleType?: string): string => {
   }
 };
 
+function delay(time: number) {
+  return new Promise(resolve => setTimeout(resolve, time));
+};
+
+const SMOOTHING_FACTOR = 0.2;  // EMA 계수
+const MAX_DELTA = 5;         // 한 프레임당 최대 회전량(°)
 
 export default function ResultScreen() {
+  const mapRef = React.useRef<MapView>(null);
+  const lastSmoothed = React.useRef(0);
+  
+  const mapViewLoaded = async() => {
+    await delay(1000);
+    mapRef.current?.animateCamera({pitch: 90, zoom: 18.5}, { duration: 1000 });
+  };
+
+  useEffect(() => {
+    let subscription: { remove: any; };
+    (async () => {
+      // 위치 권한 요청
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.warn('위치 권한이 필요합니다.');
+        return;
+      }
+      await delay(2000);
+
+      // 나침반(Heading) 구독
+      subscription = await Location.watchHeadingAsync(({ trueHeading, magHeading }) => {
+        const raw = trueHeading > 0 ? trueHeading : magHeading;
+        
+        // 1) EMA 스무딩
+        const ema = lastSmoothed.current + SMOOTHING_FACTOR * (raw - lastSmoothed.current);
+
+        // 2) 순환 각도 차 계산 (–180~+180 사이)
+        let delta = ema - lastSmoothed.current;
+        if (delta > 180) delta -= 360;
+        if (delta < -180) delta += 360;
+
+        // 3) 최대 회전량 클램핑
+        const clamped = Math.max(-MAX_DELTA, Math.min(MAX_DELTA, delta));
+        const newHeading = (lastSmoothed.current + clamped + 360) % 360;
+        lastSmoothed.current = newHeading;
+
+        // 4) 카메라 업데이트
+        mapRef.current?.animateCamera(
+            { heading: newHeading },
+            { duration: 150 }
+          );
+      });
+    })();
+
+    return () => {
+      // 컴포넌트 언마운트 시 구독 해제
+      subscription?.remove();
+    };
+  }, []);
+
+  const goToMyLocation = async () => {
+    const { coords } = await Location.getCurrentPositionAsync();
+    mapRef.current?.animateCamera({
+      center: {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+      },
+      pitch: 90,
+      zoom: 18.5
+    }, { duration: 300 });
+  };
 
   // Zustand 스토어에서 계산 결과 가져오기
   const { origin, destination, route, weather, isLoading, error } =
@@ -226,162 +271,263 @@ export default function ResultScreen() {
     router.back(); // 이전 화면으로 돌아가기
   };
 
-  // 날짜 포맷팅 함수
+  // 날짜 포맷팅 함수 (오전/오후 포함, 공백 추가)
   const formatTime = (isoString: string) => {
     const date = new Date(isoString);
     const hours = date.getHours();
     const minutes = String(date.getMinutes()).padStart(2, "0");
-    return `${hours}:${minutes}`;
+    const period = hours < 12 ? "오전" : "오후";
+    const h12 = hours % 12 === 0 ? 12 : hours % 12;
+    return `${period} ${h12}:${minutes}`;
   };
 
-  // 상세 타임라인 렌더링 함수
-  const renderDetailedTimeline = () => {
-    if (!route || !route.steps) return null;
-    
+  // 상단 안내 메시지 생성
+  const getTopMessage = () => {
+    if (!route) return null;
+    const time = formatTime(route.departureTime);
+    if (weather?.condition === "rainy" || weather?.condition === "cloudy") {
+      return { 
+        message: "우산을 챙겨서 출발하세요!",
+        time
+      };
+    }
+    return {
+      message: "출발하세요!",
+      time
+    };
+  };
+
+  // 네이버지도 스타일 환승정보: 노선색, 노선명, 출발정류장, 도착정류장, 출발/도착시간, 소요시간, 정차수 등
+  const renderTransferInfo = () => {
+    if (!route?.steps) return null;
+    const transitSteps = route.steps.filter(step => step.mode === 'TRANSIT');
+    if (transitSteps.length === 0) return null;
+
     return (
-      <>
-        {/* 출발 */}
-        <View style={styles.timelineItem}>
-          <View style={styles.timelineContent}>
-            <View style={{flexDirection: "row", alignItems: "center"}}>
-              <View style={styles.timelineDot}>
-                <View style={styles.blueDotSmall} />
-              </View>
-              <TextMedium style={[styles.timelineTime, {marginRight: 4}]}>
-                {formatTime(route.departureTime)}
+      <View style={{ marginVertical: 16 }}>
+        {transitSteps.map((step, idx) => (
+          <View
+            key={idx}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginBottom: 12,
+              padding: 12,
+              borderRadius: 10,
+              backgroundColor: '#F8F9FA',
+              borderWidth: 1,
+              borderColor: '#E5E7EB',
+            }}
+          >
+            {/* 노선 색상 바 */}
+            <View
+              style={{
+                width: 6,
+                height: 48,
+                borderRadius: 3,
+                backgroundColor: getPolylineColor(step.vehicle_type),
+                marginRight: 12,
+              }}
+            />
+            {/* 환승 정보 텍스트 */}
+            <View style={{ flex: 1 }}>
+              <TextMedium style={{ fontFamily: "Pretendard_Bold", fontSize: 16, color: "#222" }}>
+                {step.line_name}
               </TextMedium>
-              <View style={styles.routeChip}>
-                <TextSmall style={[styles.chipText]}>출발</TextSmall>
-              </View>
+              <TextSmall style={{ color: "#666", marginTop: 2 }}>
+                {step.departure_stop} ({step.departure_time}) → {step.arrival_stop} ({step.arrival_time})
+              </TextSmall>
+              <TextSmall style={{ color: "#888", marginTop: 2 }}>
+                {step.num_stops ? `${step.num_stops}개 정차 • ` : ""}
+                {step.duration_text}
+              </TextSmall>
             </View>
-            <TextMedium style={[styles.timelineLocation]}>
-              {origin?.name || "현재 위치"}
-            </TextMedium>
           </View>
-        </View>
-        
-        {/* 모든 경로 단계 표시 */}
-        {route.steps.map((step, index) => {
-          // 마지막 단계는 도착 정보만 표시
-          if (index === (route.steps?.length ?? 0) - 1) return null;
-          
-          return (
-            <React.Fragment key={`step-${index}`}>
-              {/* 도보인 경우 */}
-              {step.mode === 'WALKING' && (
-                <View style={styles.timelineItem}>
-                  <View style={styles.timelineContent}>
-                    <View style={{flexDirection: "row", alignItems: "center", marginLeft: 24}}>
-                      <TransportIcon type="WALKING" size={16} color="#2563EB" style={{marginRight: 10}} />
-                      <View style={styles.walkingChip}>
-                        <TextSmall style={[styles.walkingChipText]}>도보</TextSmall>
-                      </View>
-                      <TextSmall style={[styles.transportText]}>
-                        {step.distance_text} • {step.duration_text}
-                      </TextSmall>
-                    </View>
-                    {step.instruction && (
-                      <TextSmall style={[styles.timelineLocation, {color: '#64748B'}]}>
-                        {step.instruction}
-                      </TextSmall>
-                    )}
-                  </View>
-                </View>
-              )}
-              
-              {/* 대중교통인 경우 */}
-              {step.mode === 'TRANSIT' && (
-                <>
-                  <View style={styles.timelineItem}>
-                    <View style={styles.timelineContent}>
-                      <View style={{flexDirection: "row", alignItems: "center", marginLeft: 24}}>
-                        <TransportIcon 
-                          type={step.vehicle_type || 'DEFAULT'} 
-                          size={16} 
-                          color={getPolylineColor(step.vehicle_type)} 
-                          style={{marginRight: 10}} 
-                        />
-                        <View style={styles.transportChip}>
-                          <TextSmall style={[styles.transportChipText]}>
-                            {step.line_name || ''}
-                          </TextSmall>
-                        </View>
-                        <TextSmall style={[styles.transportText]}>
-                          {step.departure_time} 탑승
-                        </TextSmall>
-                      </View>
-                      <TextMedium style={[styles.timelineLocation]}>
-                        {step.departure_stop} 정류장
-                      </TextMedium>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.timelineItem}>
-                    <View style={styles.timelineContent}>
-                      <View style={{flexDirection: "row", alignItems: "center", marginLeft: 24}}>
-                        <DynamicIcon name="clock" size={16} color="#1D72E8" style={{marginRight: 10}} />
-                        <TextSmall style={styles.transportText}>
-                          {step.duration_text} 소요 • {step.num_stops}개 정류장
-                        </TextSmall>
-                      </View>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.timelineItem}>
-                    <View style={styles.timelineContent}>
-                      <View style={{flexDirection: "row", alignItems: "center"}}>
-                        <View style={[styles.timelineDot, {backgroundColor: "#ffffff"}]}>
-                          {index < ((route.steps?.length ?? 0) - 2) ? (
-                            <DynamicIcon name="repeat" size={16} color="#A16207" />
-                          ) : (
-                            <DynamicIcon name="log-out" size={16} color="#1D72E8" />
-                          )}
-                        </View>
-                        <TextMedium style={[styles.timelineTime, {marginRight: 4}]}>
-                          {step.arrival_time}
-                        </TextMedium>
-                        <View style={styles.transferChip}>
-                          <TextSmall style={[styles.transferChipText]}>
-                            {index < ((route.steps?.length ?? 0) - 2) ? "환승" : "하차"}
-                          </TextSmall>
-                        </View>
-                      </View>
-                      <TextMedium style={[styles.timelineLocation]}>
-                        {step.arrival_stop}
-                      </TextMedium>
-                    </View>
-                  </View>
-                </>
-              )}
-            </React.Fragment>
-          );
-        })}
-        
-        {/* 도착 */}
-        <View style={styles.timelineItem}>
-          <View style={styles.timelineContent}>
-            <View style={{flexDirection: "row", alignItems: "center"}}>
-              <View style={styles.timelineDot}>
-                <View style={styles.redDotSmall} />
-              </View>
-              <TextMedium style={[styles.timelineTime, {marginRight: 4}]}>
-                {formatTime(route.arrivalTime)}
-              </TextMedium>
-              <View style={styles.arrivalChip}>
-                <TextSmall style={[styles.arrivalChipText]}>도착</TextSmall>
-              </View>
-            </View>
-            <TextMedium style={[styles.timelineLocation]}>
-              {destination?.name || "목적지"}
-            </TextMedium>
-          </View>
-        </View>
-      </>
+        ))}
+      </View>
+
     );
   };
 
-  // 날씨 정보
-  const weatherInfo = getWeatherInfo();
+  // 상세 이동정보
+  const renderDetailedTimeline = () => {
+    if (!route || !route.steps) return null;
+    return (
+      <View style={{ marginVertical: 16 }}>
+        {route.steps.map((step, idx) => (
+          <View
+            key={idx}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginBottom: 12,
+              padding: 12,
+              borderRadius: 10,
+              backgroundColor: '#F8F9FA',
+              borderWidth: 1,
+              borderColor: '#E5E7EB',
+            }}
+          >
+            {/* 단계별 색상 바 */}
+            <View
+              style={{
+                width: 6,
+                height: 48,
+                borderRadius: 3,
+                backgroundColor: getPolylineColor(step.vehicle_type),
+                marginRight: 12,
+              }}
+            />
+            {/* 상세 정보 텍스트 */}
+            <View style={{ flex: 1 }}>
+              <TextMedium style={{ fontFamily: "Pretendard_Bold", fontSize: 16, color: "#222" }}>
+                {step.mode === "WALKING"
+                  ? step.instruction || "도보 이동"
+                  : step.line_name}
+              </TextMedium>
+              <TextSmall style={{ color: "#666", marginTop: 2 }}>
+                {step.departure_stop && step.arrival_stop
+                  ? `${step.departure_stop} → ${step.arrival_stop}`
+                  : ""}
+              </TextSmall>
+              <TextSmall style={{ color: "#888", marginTop: 2 }}>
+                {step.mode === "WALKING"
+                  ? step.duration_text
+                  : [
+                      step.departure_time ? `${step.departure_time} 출발` : "",
+                      step.arrival_time ? `${step.arrival_time} 도착` : "",
+                      step.num_stops ? `${step.num_stops}개 정차` : "",
+                      step.duration_text,
+                    ]
+                      .filter(Boolean)
+                      .join(" • ")
+                }
+              </TextSmall>
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  // 네이버 스타일 한줄 타임라인 (구간별 소요시간에 따라 길이 조정, 위에 총 소요시간)
+  const renderTimelineBar = () => {
+    if (!route || !route.steps) return null;
+
+    // 총 소요시간 계산 (분 단위)
+    let totalMinutes = 0;
+    route.steps.forEach(step => {
+      if (typeof step.duration_text === "string") {
+        const minMatch = step.duration_text.match(/(\d+)분/);
+        const hourMatch = step.duration_text.match(/(\d+)시간/);
+        const min = minMatch ? parseInt(minMatch[1], 10) : 0;
+        const hour = hourMatch ? parseInt(hourMatch[1], 10) : 0;
+        totalMinutes += hour * 60 + min;
+      }
+    });
+
+    // route.duration(초 단위) → 분 단위
+    const durationMinutes = route.duration ? Math.round(route.duration / 60) : 0;
+
+    // 각 구간의 flex 비율 계산
+    const getStepMinutes = (step: any) => {
+      if (typeof step.duration_text === "string") {
+        const minMatch = step.duration_text.match(/(\d+)분/);
+        const hourMatch = step.duration_text.match(/(\d+)시간/);
+        const min = minMatch ? parseInt(minMatch[1], 10) : 0;
+        const hour = hourMatch ? parseInt(hourMatch[1], 10) : 0;
+        return hour * 60 + min;
+      }
+      return 10;
+    };
+
+    // 색상 및 아이콘
+    const getBarColor = (step: any) => {
+      if (step.mode === "WALKING") return "#CBD5E1";
+      return getPolylineColor(step.vehicle_type);
+    };
+    // const getIcon = (step: any) => {
+    //   if (step.mode === "WALKING") return <DynamicIcon name="walk" size={14} color="#2563EB" />;
+    //   if (step.mode === "TRANSIT") return <DynamicIcon name="bus" size={14} color={getPolylineColor(step.vehicle_type)} />;
+    //   return null;
+    // }; 아이콘 쓰고싶으면 DynamicIcon 추가해서 사용
+
+    return (
+      <View style={{ marginVertical: 5, position: "relative" }}>
+        {/* 총 소요시간 + route.duration(분) */}
+        <View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 8 }}>
+          <TextXLarge style={{ fontFamily: "Pretendard_Bold", color: "#222" }}>
+            {Math.floor(totalMinutes / 60) > 0 ? `${Math.floor(totalMinutes / 60)}시간 ` : ""}
+            {totalMinutes % 60 > 0 ? `${totalMinutes % 60}분` : ""}
+          </TextXLarge>
+          {durationMinutes > 0 && (
+            <TextXLarge style={{ fontFamily: "Pretendard_Bold", color: "#3457D5" }}>
+              {" / "}
+              {Math.floor(durationMinutes / 60) > 0 ? `${Math.floor(durationMinutes / 60)}시간 ` : ""}
+              {durationMinutes % 60 > 0 ? `${durationMinutes % 60}분` : ""}
+            </TextXLarge>
+          )}
+        </View>
+        {/* 타임라인 바 */}
+        <View style={{ flexDirection: "row", alignItems: "flex-end", minHeight: 38 }}>
+          {route.steps.map((step, idx) => {
+            const minutes = getStepMinutes(step);
+            const color = getBarColor(step);
+            return (
+              <View
+                key={idx}
+                style={{
+                  flex: minutes,
+                  flexDirection: "column",
+                  alignItems: "center",
+                  minWidth: 28,
+                  marginHorizontal: idx === 0 ? 0 : 2,
+                }}
+              >
+                <View
+                  style={{
+                    width: "100%",
+                    height: 16,
+                    borderRadius: 8,
+                    backgroundColor: color,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    flexDirection: "row",
+                  }}
+                >
+                  {/* ...no icon or text... */}
+                </View>
+                <TextSmall style={{
+                  color: "#64748B",
+                  fontSize: 12,
+                  marginTop: 2,
+                  fontFamily: "Pretendard_SemiBold"
+                }}>
+                  {step.duration_text}
+                </TextSmall>
+              </View>
+            );
+          })}
+        </View>
+        {/* 도착시간: 타임라인 바 우측 하단, 회색 글씨, 상자 없이, 더 아래로 */}
+        {route.arrivalTime && (
+          <TextSmall
+            style={{
+              position: "absolute",
+              right: 0,
+              bottom: -18, // 기존보다 더 아래로 내림
+              color: "#A0A0A0",
+              fontSize: 12,
+              fontFamily: "Pretendard_SemiBold",
+              marginRight: 2,
+            }}
+          >
+            도착 {formatTime(route.arrivalTime)}
+          </TextSmall>
+        )}
+      </View>
+    );
+  };
 
   // 로딩 중이면 로딩 인디케이터 표시
   if (isLoading) {
@@ -437,192 +583,132 @@ export default function ResultScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.container}>
-        <ScrollView
-          style={styles.scrollContainer}
-          showsVerticalScrollIndicator={false}
-          bounces={true}
-        >
+        <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false} bounces={true}>
+          {/* 상단 메시지 */}
           <View style={styles.header}>
-            <TextXXXLarge style={[styles.title]}>TimeTOGO</TextXXXLarge>
+            {getTopMessage() && (
+              <>
+                <TextXXXLarge style={{ color: "#3457D5", fontFamily: "Pretendard_ExtraBold", marginBottom: 4, textAlign: "center" }}>
+                  {getTopMessage() ? getTopMessage()!.time : ""}
+                </TextXXXLarge>
+                <TextXLarge style={{ color: "#3457D5", fontFamily: "Pretendard_Bold", textAlign: "center" }}>
+                  {getTopMessage()!.message}
+                </TextXLarge>
+              </>
+            )}
           </View>
-          <View style={styles.subHeader}>
-            <PressableOpacity onPress={handleBackPress} style={styles.backBtn}>
-              <DynamicIcon name="arrow-left" size={16} color="black" />
-              <TextMedium style={[styles.backBtnText]}>홈으로 가기</TextMedium>
+          {/* 구분선 */}
+          <View style={{
+            height: 1,
+            backgroundColor: "#C6C8C9",
+            width: "100%",
+            marginBottom: 0
+          }} />
+          {/* 지도 */}
+          <View style={[styles.mapSection, { marginTop: 0 }]}>
+            <MapView
+              ref={mapRef}
+              showsUserLocation={true}
+              provider={PROVIDER_GOOGLE}
+              style={styles.mapPlaceholder}
+              region={{
+                latitude: origin?.coordinates.latitude || 37.5665,
+                longitude: origin?.coordinates.longitude || 126.9780,
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
+              }}
+              customMapStyle={mapStyle}
+              onLayout={mapViewLoaded}
+            >
+              {origin && (
+                <Marker
+                  coordinate={{
+                    latitude: origin.coordinates.latitude,
+                    longitude: origin.coordinates.longitude,
+                  }}
+                  title="출발지"
+                  description={origin.name}
+                  pinColor="#1B72E8"
+                />
+              )}
+              {destination && (
+                <Marker
+                  coordinate={{
+                    latitude: destination.coordinates.latitude,
+                    longitude: destination.coordinates.longitude,
+                  }}
+                  title="도착지"
+                  description={destination.name}
+                  pinColor="#EA4335"
+                />
+              )}
+              {route?.steps && route.steps.map((step, index) => (
+                <React.Fragment key={`polyline-${index}`}>
+                  {step.start_location && step.end_location && (
+                    <Polyline
+                      coordinates={[
+                        ...decodePolygon(step.polyline || ""),
+                      ]}
+                      strokeColor={step.mode === 'WALKING' ? '#2563EB' : getPolylineColor(step.vehicle_type)}
+                      strokeWidth={5}
+                      fillColor={step.mode === 'WALKING' ? '#2563EB' : getPolylineColor(step.vehicle_type)}
+                    />
+                  )}
+                </React.Fragment>
+              ))}
+            </MapView>
+            <PressableOpacity
+              style={styles.myLocationBtn}
+              onPress={goToMyLocation}>
+                <Image source={require('../assets/images/TimeTOGO.png')} style={{ width: 32, height: 32 }}/>
             </PressableOpacity>
           </View>
 
-          <View style={styles.main}>
-            <View style={styles.departureInfo}>
-              <TextXLarge style={styles.infoLabel}>계산된 출발 시간</TextXLarge>
-              <TextXXXLarge style={styles.timeText}>
-                {route ? formatTime(route.departureTime) : "계산 중..."}
-              </TextXXXLarge>
-            </View>
+          {/* 상세 이동 정보 */}
+          <View style={{ marginHorizontal: 24 }}>
+            {/* 네이버 한줄 타임라인 */}
+            {renderTimelineBar()}
+            {/* 환승 정보(네이버 길찾기 스타일) */}
+            {renderTransferInfo()}
+          </View>
 
-            <View style={styles.weatherInfo}>
-              <View style={styles.weatherContent}>
-                <DynamicIcon
-                  name={weatherInfo.icon as any}
-                  size={16}
-                  color={weatherInfo.iconColor}
-                />
-                <TextMedium style={[styles.weatherText]}>
-                  {weatherInfo.message}
-                </TextMedium>
-              </View>
-              <View style={styles.weatherDetails}>
-                {weather && (
-                  <>
-                    <TextNormal style={[styles.weatherDetailText]}>
-                      <DynamicIcon name="thermometer" size={14} color="#92400D" />{" "}
-                      {weather.temperature}°C
-                    </TextNormal>
-                    <TextNormal style={[styles.weatherDetailText]}>
-                      <DynamicIcon name="wind" size={14} color="#92400D" />{" "}
-                      {weather.windSpeed} m/s
-                    </TextNormal>
-                    <TextNormal style={[styles.weatherDetailText]}>
-                      <DynamicIcon name="droplet" size={14} color="#92400D" />{" "}
-                      {weather.humidity}%
-                    </TextNormal>
-                  </>
-                )}
-              </View>
-            </View>
-
-            <View style={styles.actionButtons}>
-              <PressableOpacity style={styles.actionButton}>
-                <DynamicIcon name="compass" size={20} color="black" />
-                <TextNormal style={[styles.actionText]} numberOfLines={1}>위치 추적</TextNormal>
-              </PressableOpacity>
-              <PressableOpacity style={styles.actionButton}>
-                <DynamicIcon name="bell" size={20} color="black" />
-                <TextNormal style={[styles.actionText]} numberOfLines={1}>알람 설정</TextNormal>
-              </PressableOpacity>
-              <PressableOpacity style={styles.actionButton}>
-                <DynamicIcon name="upload" size={20} color="black" />
-                <TextNormal style={[styles.actionText]} numberOfLines={1}>위치 공유</TextNormal>
-              </PressableOpacity>
-            </View>
-
-            <View style={styles.mapSection}>
-              <TextXLarge style={styles.sectionTitle}>경로 지도</TextXLarge>
-              <View style={styles.map}>
-                <MapView
-                  showsUserLocation={true}
-                  showsMyLocationButton={true}
-                  provider={PROVIDER_GOOGLE}
-                  style={styles.mapPlaceholder}
-                  region={{
-                    latitude: origin?.coordinates.latitude || 37.5665,
-                    longitude: origin?.coordinates.longitude || 126.9780,
-                    latitudeDelta: 0.05,
-                    longitudeDelta: 0.05,
-                  }}
-                  customMapStyle={mapStyle} // 사용자 정의 지도 스타일 적용
-                >
-                  {/* 출발지 마커 */}
-                  {origin && (
-                    <Marker
-                      coordinate={{
-                        latitude: origin.coordinates.latitude,
-                        longitude: origin.coordinates.longitude,
-                      }}
-                      title="출발지"
-                      description={origin.name}
-                      pinColor="#1B72E8"
-                    />
-                  )}
-                  
-                  {/* 도착지 마커 */}
-                  {destination && (
-                    <Marker
-                      coordinate={{
-                        latitude: destination.coordinates.latitude,
-                        longitude: destination.coordinates.longitude,
-                      }}
-                      title="도착지"
-                      description={destination.name}
-                      pinColor="#EA4335"
-                    />
-                  )}
-                  
-                  {/* 경로 폴리라인 */}
-                  {route?.steps && route.steps.map((step, index) => (
-                    <React.Fragment key={`polyline-${index}`}>
-                      {step.start_location && step.end_location && (
-                        <Polyline
-                          coordinates={[
-                            ...decodePolygon(step.polyline || ""),
-                          ]}
-                          strokeColor={step.mode === 'WALKING' ? '#2563EB' : getPolylineColor(step.vehicle_type)}
-                          strokeWidth={5}
-                          fillColor={step.mode === 'WALKING' ? '#2563EB' : getPolylineColor(step.vehicle_type)}
-                        />
-                      )}
-                    </React.Fragment>
-                  ))}
-                </MapView>
-              </View>
-
-              <View style={styles.routeInfo}>
-                <View style={styles.locationItem}>
-                  <View style={styles.blueDot} />
-                  <View>
-                    <TextMedium style={[styles.locationTitle]}>
-                      출발지
-                    </TextMedium>
-                    <TextMedium style={[styles.locationName]}>
-                      {origin?.name || "현재 위치"}
-                    </TextMedium>
-                    <TextSmall style={[styles.locationDesc]}>
-                      {route?.steps && route.steps.length > 0 ? route.steps[0].instruction : ""}
-                    </TextSmall>
-                  </View>
-                </View>
-                
-                {route?.steps && route.steps.filter(step => step.mode === 'TRANSIT').map((transitStep, index) => (
-                  <View key={`transit-${index}`} style={styles.locationItem}>
-                    <View style={styles.yellowDot} />
-                    <View>
-                      <TextMedium style={[styles.locationTitle]}>
-                        {getTransportTypeText(transitStep.vehicle_type)} {transitStep.line_name}
-                      </TextMedium>
-                      <TextMedium style={[styles.locationName]}>
-                        {transitStep.departure_stop} → {transitStep.arrival_stop}
-                      </TextMedium>
-                      <TextSmall style={[styles.locationDesc]}>
-                        {transitStep.departure_time} 출발 • {transitStep.duration_text} 소요 • {transitStep.arrival_time} 도착
-                      </TextSmall>
-                    </View>
-                  </View>
-                ))}
-
-                <View style={[styles.locationItem, { marginBottom: 0 }]}>
-                  <View style={styles.redDot} />
-                  <View>
-                    <TextMedium style={[styles.locationTitle]}>
-                      도착지
-                    </TextMedium>
-                    <TextMedium style={[styles.locationName]}>
-                      {destination?.name || "목적지"}
-                    </TextMedium>
-                    <TextSmall style={[styles.locationDesc]}>
-                      {route?.steps && route.steps.length > 0 ? 
-                        route.steps[route.steps.length - 1].instruction : 
-                        ""}
-                    </TextSmall>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.detailSection}>
-              <TextXLarge style={styles.sectionTitle}>상세 이동 정보</TextXLarge>
-              {renderDetailedTimeline()}
+          {/* 도착 시간 안내 */}
+          {/* 
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "center",
+              alignItems: "center",
+              marginVertical: 16,
+              gap: 12,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: "#F1F5FF",
+                borderRadius: 16,
+                paddingVertical: 16,
+                paddingHorizontal: 28,
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: "#B4CDF1",
+                minWidth: 220,
+                shadowColor: "#3457D5",
+                shadowOpacity: 0.08,
+                shadowRadius: 8,
+                elevation: 2,
+              }}
+            >
+              <TextSmall style={{ color: "#3457D5", fontFamily: "Pretendard_Bold", marginBottom: 2 }}>
+                도착 시간
+              </TextSmall>
+              <TextXLarge style={{ color: "#3457D5", fontFamily: "Pretendard_ExtraBold" }}>
+                {route ? formatTime(route.arrivalTime) : ""}
+              </TextXLarge>
             </View>
           </View>
+          */}
+          <SafeAreaView style={styles.safe} edges={["bottom"]}></SafeAreaView>
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -636,9 +722,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingVertical: 20,
-    justifyContent: "center",
-    borderBottomColor: "#C6C8C9",
+    height: 100,
+    justifyContent: 'center',
+    borderBottomColor: '#C6C8C9',
+    borderBottomWidth: 1,
   },
   title: {
     color: "#3457D5",
@@ -749,7 +836,7 @@ const styles = StyleSheet.create({
   },
   mapPlaceholder: {
     width: "100%",
-    height: "100%",
+    height: 580,
     backgroundColor: "#DEEBFF",
   },
   routeInfo: {
@@ -940,5 +1027,21 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: "#fff",
+  },
+  myLocationBtn: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4, // Android 그림자
+    shadowColor: '#000', // iOS 그림자
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
 });

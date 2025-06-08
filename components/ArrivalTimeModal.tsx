@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
     marginVertical: 12,
   },
   colon: {
-    fontFamily: 'Pretendard-Bold',
+    fontFamily: 'Pretendard_Bold',
     marginHorizontal: 8,
   },
   confirmBtn: {

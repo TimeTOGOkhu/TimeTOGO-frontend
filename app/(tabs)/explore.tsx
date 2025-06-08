@@ -15,11 +15,11 @@ import PressableOpacity from "@/components/PressableOpacity";
 import { useCalculationStore, Location as StoreLocation } from '@store/calculationStore';
 import { calculateRoute } from '@services/routeService';
 import Svg, { Circle } from 'react-native-svg';
-
 import { useTranslation } from '@hooks/useTranslation';
 
 export default function ExploreScreen() {
   const [locationPermission, setLocationPermission] = useState(false);
+  const [now, setNow] = useState(new Date());
   const [arrival, setArrival] = useState<Date | null>(null);
 
   // 번역 함수
@@ -93,8 +93,8 @@ export default function ExploreScreen() {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
-          '위치 권한이 필요합니다',
-          '앱을 사용하기 위해 위치 권한을 허용해주세요.',
+          '위치 권한 필요',
+          '이 앱은 위치 정보가 필요합니다. 설정에서 위치 권한을 허용해주세요.',
           [{ text: '확인' }],
         );
         return;
@@ -115,6 +115,12 @@ export default function ExploreScreen() {
         console.error('위치 정보를 가져오는데 실패했습니다:', error);
       }
     })();
+  }, []);
+
+  // 현재 시간 1초마다 업데이트
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
   const formatKoreanDate = (date: Date) => {
@@ -299,7 +305,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 50,
-    fontFamily: 'Pretendard-Bold',
+    fontFamily: 'Pretendard_Bold',
     color: '#3457D5',
     textAlign: 'center',
   },
