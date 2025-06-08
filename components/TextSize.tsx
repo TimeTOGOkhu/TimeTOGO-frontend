@@ -41,7 +41,7 @@ export const TextXXXLarge: React.FC<TextProps> = (props) => <TextSize size="xxxl
 export const TextTitle: React.FC<TextProps> = ({ style, ...props }) => (
   <TextSize
     size="xlarge"
-    style={[{ fontWeight: 'bold' }, style]}
+    style={[{ fontFamily:'Pretendard_Bold' }, style]}
     {...props}
   />
 );
@@ -49,7 +49,7 @@ export const TextTitle: React.FC<TextProps> = ({ style, ...props }) => (
 export const TextHeading: React.FC<TextProps> = ({ style, ...props }) => (
   <TextSize
     size="large"
-    style={[{ fontWeight: 'bold' }, style]}
+    style={[{ fontFamily:'Pretendard_Bold' }, style]}
     {...props}
   />
 );

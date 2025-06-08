@@ -42,6 +42,12 @@ export const TRANSLATIONS = {
     route: '경로',
     weather: '날씨',
     duration: '소요 시간',
+
+    // 히스토리 화면
+    historyRouteTitle: '경로',
+    historyTravelTime: '예상 소요 시간',
+    historyApplyText: '적용',
+    noHistory: '이전 기록이 없습니다.',
     
     // 공통
     loading: '로딩 중...',
@@ -51,7 +57,7 @@ export const TRANSLATIONS = {
     
     // 탭바
     explore: '경로 탐색',
-    favorite: '즐겨찾기',
+    history: '이전 기록',
     tabSettings: '설정',
   },
   en: {
@@ -88,6 +94,12 @@ export const TRANSLATIONS = {
     route: 'Route',
     weather: 'Weather',
     duration: 'Duration',
+
+    // History Screen
+    historyRouteTitle: 'Route',
+    historyTravelTime: 'Estimated Travel Time',
+    historyApplyText: 'Apply',
+    noHistory: 'No previous history.',
     
     // 공통
     loading: 'Loading...',
@@ -97,7 +109,7 @@ export const TRANSLATIONS = {
     
     // 탭바
     explore: 'Explore',
-    favorite: 'Favorites',
+    history: 'History',
     tabSettings: 'Settings',
   },
   zh: {
@@ -134,6 +146,12 @@ export const TRANSLATIONS = {
     route: '路线',
     weather: '天气',
     duration: '所需时间',
+
+    // 历史记录屏幕
+    historyRouteTitle: '路线',
+    historyTravelTime: '预计行程时间',
+    historyApplyText: '应用',
+    noHistory: '没有以前的记录。',
     
     // 공통
     loading: '加载中...',
@@ -143,7 +161,7 @@ export const TRANSLATIONS = {
     
     // 탭바
     explore: '路线探索',
-    favorite: '收藏夹',
+    history: '以前的记录',
     tabSettings: '设置',
   },
   ja: {
@@ -180,6 +198,12 @@ export const TRANSLATIONS = {
     route: 'ルート',
     weather: '天気',
     duration: '所要時間',
+
+    // 履歴画面
+    historyRouteTitle: 'ルート',
+    historyTravelTime: '推定所要時間',
+    historyApplyText: '適用',
+    noHistory: '以前の履歴はありません。',
     
     // 공통
     loading: '読み込み中...',
@@ -189,7 +213,7 @@ export const TRANSLATIONS = {
     
     // 탭바
     explore: 'ルート探索',
-    favorite: 'お気に入り',
+    history: '以前の履歴',
     tabSettings: '設定',
   },
 };

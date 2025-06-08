@@ -1,6 +1,8 @@
 // API 호출을 위한 서비스 구현
 import { useCalculationStore } from '@store/calculationStore';
+import { useHistoryStore } from '@store/historyStore';
 import { LatLng } from 'react-native-maps';
+import { Location as StoreLocation } from '@store/calculationStore';
 
 // 람다 함수 응답 타입 정의
 interface WeatherCondition {
@@ -73,7 +75,7 @@ const fetchWithTimeout = async (url: string, options = {}, timeout = 5000) => {
   }
 };
 
-export const calculateRoute = async (params: CalculateRouteParams) => {
+export const calculateRoute = async (params: CalculateRouteParams, origin: StoreLocation, destination: StoreLocation) => {
   const store = useCalculationStore.getState();
 
   try {
@@ -159,12 +161,41 @@ export const calculateRoute = async (params: CalculateRouteParams) => {
     // 응답을 성공적으로 파싱했으므로 로딩 상태 종료
     store.setLoadingFinished();
 
-    // 스텝 정보 포함하여 반환
-    return {
-      route: store.route,
-      weather: store.weather,
-      steps: data.steps
+    // 1) 직접 만든 route/​weather 객체
+    const routeInfo = {
+      distance: 0,
+      duration: data.duration_sec,
+      arrivalTime: new Date(arrivalUnixTime * 1000).toISOString(),
+      departureTime: new Date(departureUnixTime * 1000).toISOString(),
+      steps: data.steps,
     };
+    const weatherInfo = {
+      condition: mapWeatherCondition(weatherCondition.type),
+      temperature: weatherCondition.temperature_celsius,
+      humidity: 0,
+      windSpeed: 0,
+      icon: weatherCondition.icon,
+      precipitationChance: weatherCondition.precipitation_chance,
+    };
+
+    // 2) 스토어에도 저장
+    store.setRoute(routeInfo);
+    store.setWeather(weatherInfo);
+    store.setLoadingFinished();
+
+    useHistoryStore.getState().addHistory({
+      origin: origin,
+      destination: destination,
+      travelTime: routeInfo.duration,
+    });
+
+    // 3) 직접 만든 객체를 반환하면 null 체크를 걱정할 필요가 없습니다
+    return {
+      route: routeInfo,
+      weather: weatherInfo,
+      steps: data.steps,
+    };
+    
   } catch (error) {
     if (error instanceof Error) {
       store.setCalculationError(error.message);

@@ -148,10 +148,10 @@ const styles = StyleSheet.create({
   },
   selectedLanguageName: {
     color: '#3457D5',
-    fontWeight: 'bold',
+    fontFamily: 'Pretendard-Bold',
   },
   checkmark: {
     color: '#3457D5',
-    fontWeight: 'bold',
+    fontFamily: 'Pretendard-Bold',
   },
 });
