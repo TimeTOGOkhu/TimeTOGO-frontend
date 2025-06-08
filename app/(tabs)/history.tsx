@@ -180,10 +180,10 @@ export default function HistoryScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>{t('history')}</Text>
       </View>
-      <FlatList // ScrollView 대신 FlatList 사용
+      <FlatList
         data={historys}
         renderItem={renderHistoryItem}
-        keyExtractor={(item, index) => `${item.origin}-${item.destination}-${index}`} // 고유 key 보강
+        keyExtractor={(item) => `${item.origin.coordinates.latitude}-${item.origin.coordinates.longitude}-${item.destination.coordinates.latitude}-${item.destination.coordinates.longitude}`}
         contentContainerStyle={styles.list}
         ListEmptyComponent={ // 히스토리가 없을 때 표시할 컴포넌트
           <View style={styles.emptyContainer}>
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   },
   list: {
     padding: 16,
-    flexGrow: 1, // FlatList 내용이 적을 때도 중앙 정렬 등을 위해 추가
+    flexGrow: 1,
   },
   card: {
     borderWidth: 1,
