@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 30,
-    fontFamily: 'Pretendard-Bold',
+    fontFamily: 'Pretendard_Bold',
     color: '#3457D5',
     textAlign: 'center',
   },

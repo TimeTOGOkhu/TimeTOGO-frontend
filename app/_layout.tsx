@@ -9,7 +9,7 @@ export default function RootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     Pretendard_Black: require('../assets/fonts/Pretendard-Black.otf'),
-    Pretendard_Bold: require('../assets/fonts/Pretendard-Bold.otf'),
+    Pretendard_Bold: require('../assets/fonts/Pretendard_Bold.otf'),
     Pretendard_ExtraBold: require('../assets/fonts/Pretendard-ExtraBold.otf'),
     Pretendard_ExtraLight: require('../assets/fonts/Pretendard-ExtraLight.otf'),
     Pretendard_Light: require('../assets/fonts/Pretendard-Light.otf'),
