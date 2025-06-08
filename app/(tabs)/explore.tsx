@@ -15,6 +15,7 @@ import PressableOpacity from "@/components/PressableOpacity";
 import { useCalculationStore, Location as StoreLocation } from '@store/calculationStore';
 import { calculateRoute } from '@services/routeService';
 import Svg, { Circle } from 'react-native-svg';
+
 import { useTranslation } from '@hooks/useTranslation';
 
 export default function ExploreScreen() {
@@ -23,6 +24,11 @@ export default function ExploreScreen() {
 
   // 번역 함수
   const { t } = useTranslation();
+
+  // calculation store에서 origin과 destination 가져오기
+  const storeOrigin = useCalculationStore((s) => s.origin);
+  const storeDestination = useCalculationStore((s) => s.destination);
+  const storeRoute = useCalculationStore((s) => s.route);
 
   // 출발지 위치 정보
   const [startLocation, setStartLocation] = useState<StoreLocation| null>(null);
@@ -38,6 +44,20 @@ export default function ExploreScreen() {
 
   // 도착시간 모달
   const [showArrivalModal, setShowArrivalModal] = useState(false);
+
+  // calculation store의 값이 변경되면 local state 업데이트
+  useEffect(() => {
+    if (storeRoute) return;
+
+    if (storeOrigin) {
+      setStartLocation(storeOrigin);
+      setArrival(null); // 히스토리에서 새로운 출발지가 설정되면 도착 시간 초기화
+    }
+    if (storeDestination) {
+      setEndLocation(storeDestination);
+      setArrival(null); // 히스토리에서 새로운 도착지가 설정되면 도착 시간 초기화
+    }
+  }, [storeOrigin, storeDestination]);
 
   // 로고 클릭 시 미입력 모달 오픈
   const handleLogoClick = () => {
@@ -73,9 +93,9 @@ export default function ExploreScreen() {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
-          t('locationPermissionNeeded'),
-          t('locationPermissionMessage'),
-          [{ text: t('confirm') }],
+          '위치 권한이 필요합니다',
+          '앱을 사용하기 위해 위치 권한을 허용해주세요.',
+          [{ text: '확인' }],
         );
         return;
       }
@@ -87,7 +107,7 @@ export default function ExploreScreen() {
         // 현재 위치를 출발지로 설정
         const { latitude, longitude } = location.coords;
         setStartLocation({
-          name: t('currentLocation'),
+          name: '현재 위치',
           coordinates: { latitude, longitude }
         });
 
@@ -95,7 +115,7 @@ export default function ExploreScreen() {
         console.error('위치 정보를 가져오는데 실패했습니다:', error);
       }
     })();
-  }, [t]);
+  }, []);
 
   const formatKoreanDate = (date: Date) => {
     const y = date.getFullYear();
@@ -126,7 +146,7 @@ export default function ExploreScreen() {
       
       // 도착 시간을 유닉스 타임스탬프로 변환
       const arrivalUnixTime = Math.floor(arrival!.getTime() / 1000).toString();
-      
+
       // 계산 시작 및 결과 페이지로 이동
       store.startCalculation();
       router.navigate('../result');
@@ -136,7 +156,7 @@ export default function ExploreScreen() {
         origin: getLocationString(origin),
         destination: getLocationString(destination),
         arrival_time: arrivalUnixTime
-      }).catch(error => {
+      }, origin, destination).catch(error => {
         console.error('경로 계산 오류:', error);
         // 오류는 store.setCalculationError에서 이미 처리됨
       });
@@ -152,7 +172,7 @@ export default function ExploreScreen() {
         <View style={styles.container} >
           {/* 헤더 */}
           <View style={[styles.header, { alignItems: 'center', justifyContent: 'center' }]}>
-            <Text style={{ fontSize: 35, color: '#3457D5', fontWeight: 'bold', textAlign: 'center' }}>
+            <Text style={{ fontSize: 35, color: '#3457D5', fontFamily:'Pretendard_Bold', textAlign: 'center' }}>
               {guideMsg}
             </Text>
           </View>
@@ -168,6 +188,7 @@ export default function ExploreScreen() {
                 setStartModalVisible(false);
               }}
               type="출발지"
+              initialCoordinates={startLocation?.coordinates}
             />
 
             {/* 도착지 모달 */}
@@ -179,6 +200,7 @@ export default function ExploreScreen() {
                 setEndModalVisible(false);
               }}
               type="도착지"
+              initialCoordinates={endLocation?.coordinates}
             />
 
             {/* 도착시간 모달 */}
@@ -277,7 +299,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 50,
-    fontWeight: 'bold',
+    fontFamily: 'Pretendard-Bold',
     color: '#3457D5',
     textAlign: 'center',
   },

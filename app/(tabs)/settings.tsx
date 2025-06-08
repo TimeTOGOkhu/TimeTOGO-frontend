@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   },
   headerText: {
     fontSize: 30,
-    fontWeight: 'bold',
+    fontFamily: 'Pretendard-Bold',
     color: '#3457D5',
     textAlign: 'center',
   },
@@ -151,6 +151,6 @@ const styles = StyleSheet.create({
   },
   selectedFontSizeText: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontFamily: 'Pretendard-Bold',
   },
 });

@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   label: {
-    fontWeight: 'bold',
+    fontFamily: 'Pretendard-Bold',
     marginBottom: 0,
     color: '#333',
   },
