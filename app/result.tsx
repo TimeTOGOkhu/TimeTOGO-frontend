@@ -6,6 +6,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -22,6 +23,7 @@ import { TransportIcon } from "@components/TransportIcon";
 import PressableOpacity from "@/components/PressableOpacity";
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import { decodePolygon } from "@/services/routeService";
+import * as Location from 'expo-location';
 
 // 네이버맵 스타일러 추천 스타일(밝고 심플, 주요 도로/철도/공원/수역 강조, 불필요한 요소 최소화)
 const mapStyle = [
@@ -65,11 +67,11 @@ const mapStyle = [
     "elementType": "geometry",
     "stylers": [{ "color": "#b3e5fc" }]
   },
-  {
-    "featureType": "park",
-    "elementType": "geometry",
-    "stylers": [{ "color": "#dcedc8" }]
-  },
+  // {
+  //   "featureType": "park",
+  //   "elementType": "geometry",
+  //   "stylers": [{ "color": "#dcedc8" }]
+  // },
   {
     "featureType": "administrative",
     "elementType": "labels.text.fill",
@@ -112,8 +114,75 @@ const getPolylineColor = (vehicleType?: string): string => {
   }
 };
 
+function delay(time: number) {
+  return new Promise(resolve => setTimeout(resolve, time));
+};
+
+const SMOOTHING_FACTOR = 0.2;  // EMA 계수
+const MAX_DELTA = 5;         // 한 프레임당 최대 회전량(°)
 
 export default function ResultScreen() {
+  const mapRef = React.useRef<MapView>(null);
+  const lastSmoothed = React.useRef(0);
+  
+  const mapViewLoaded = async() => {
+    await delay(1000);
+    mapRef.current?.animateCamera({pitch: 90, zoom: 18.5}, { duration: 1000 });
+  };
+
+  useEffect(() => {
+    let subscription: { remove: any; };
+    (async () => {
+      // 위치 권한 요청
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.warn('위치 권한이 필요합니다.');
+        return;
+      }
+      await delay(2000);
+
+      // 나침반(Heading) 구독
+      subscription = await Location.watchHeadingAsync(({ trueHeading, magHeading }) => {
+        const raw = trueHeading > 0 ? trueHeading : magHeading;
+        
+        // 1) EMA 스무딩
+        const ema = lastSmoothed.current + SMOOTHING_FACTOR * (raw - lastSmoothed.current);
+
+        // 2) 순환 각도 차 계산 (–180~+180 사이)
+        let delta = ema - lastSmoothed.current;
+        if (delta > 180) delta -= 360;
+        if (delta < -180) delta += 360;
+
+        // 3) 최대 회전량 클램핑
+        const clamped = Math.max(-MAX_DELTA, Math.min(MAX_DELTA, delta));
+        const newHeading = (lastSmoothed.current + clamped + 360) % 360;
+        lastSmoothed.current = newHeading;
+
+        // 4) 카메라 업데이트
+        mapRef.current?.animateCamera(
+            { heading: newHeading },
+            { duration: 150 }
+          );
+      });
+    })();
+
+    return () => {
+      // 컴포넌트 언마운트 시 구독 해제
+      subscription?.remove();
+    };
+  }, []);
+
+  const goToMyLocation = async () => {
+    const { coords } = await Location.getCurrentPositionAsync();
+    mapRef.current?.animateCamera({
+      center: {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+      },
+      pitch: 90,
+      zoom: 18.5
+    }, { duration: 300 });
+  };
 
   // Zustand 스토어에서 계산 결과 가져오기
   const { origin, destination, route, weather, isLoading, error } =
@@ -538,8 +607,8 @@ export default function ResultScreen() {
           {/* 지도 */}
           <View style={[styles.mapSection, { marginTop: 0 }]}>
             <MapView
+              ref={mapRef}
               showsUserLocation={true}
-              showsMyLocationButton={true}
               provider={PROVIDER_GOOGLE}
               style={styles.mapPlaceholder}
               region={{
@@ -549,6 +618,7 @@ export default function ResultScreen() {
                 longitudeDelta: 0.05,
               }}
               customMapStyle={mapStyle}
+              onLayout={mapViewLoaded}
             >
               {origin && (
                 <Marker
@@ -587,6 +657,11 @@ export default function ResultScreen() {
                 </React.Fragment>
               ))}
             </MapView>
+            <PressableOpacity
+              style={styles.myLocationBtn}
+              onPress={goToMyLocation}>
+                <Image source={require('../assets/images/TimeTOGO.png')} style={{ width: 32, height: 32 }}/>
+            </PressableOpacity>
           </View>
 
           {/* 상세 이동 정보 */}
@@ -633,6 +708,7 @@ export default function ResultScreen() {
             </View>
           </View>
           */}
+          <SafeAreaView style={styles.safe} edges={["bottom"]}></SafeAreaView>
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -951,5 +1027,21 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: "#fff",
+  },
+  myLocationBtn: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4, // Android 그림자
+    shadowColor: '#000', // iOS 그림자
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
 });
