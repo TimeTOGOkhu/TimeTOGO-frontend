@@ -1,9 +1,10 @@
 // @store/historyStore.ts
 import { create } from 'zustand';
+import { Location as StoreLocation } from '@store/calculationStore';
 
 export interface HistoryItem {
-  origin: string;
-  destination: string;
+  origin: StoreLocation;
+  destination: StoreLocation;
   travelTime: number;  // 경과 시간(초)
 }
 

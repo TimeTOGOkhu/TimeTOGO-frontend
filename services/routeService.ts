@@ -2,6 +2,7 @@
 import { useCalculationStore } from '@store/calculationStore';
 import { useHistoryStore } from '@store/historyStore';
 import { LatLng } from 'react-native-maps';
+import { Location as StoreLocation } from '@store/calculationStore';
 
 // 람다 함수 응답 타입 정의
 interface WeatherCondition {
@@ -74,7 +75,7 @@ const fetchWithTimeout = async (url: string, options = {}, timeout = 5000) => {
   }
 };
 
-export const calculateRoute = async (params: CalculateRouteParams) => {
+export const calculateRoute = async (params: CalculateRouteParams, origin: StoreLocation, destination: StoreLocation) => {
   const store = useCalculationStore.getState();
 
   try {
@@ -183,8 +184,8 @@ export const calculateRoute = async (params: CalculateRouteParams) => {
     store.setLoadingFinished();
 
     useHistoryStore.getState().addHistory({
-      origin: params.origin,
-      destination: params.destination,
+      origin: origin,
+      destination: destination,
       travelTime: routeInfo.duration,
     });
 

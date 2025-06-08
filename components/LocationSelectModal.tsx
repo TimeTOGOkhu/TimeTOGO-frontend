@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import Modal from 'react-native-modal';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import CustomGooglePlacesAutocomplete from '@/components/GooglePlacesAutocomplete'; // ✅ 만든 커스텀 컴포넌트로 교체
 import { Location as StoreLocation } from '@store/calculationStore';
 import {
@@ -9,18 +9,30 @@ import {
 } from "@components/TextSize";
 import PressableOpacity from './PressableOpacity';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 interface Props {
   visible: boolean;
   onClose: () => void;
   onSelectLocation: (location: StoreLocation) => void;
   type: '출발지' | '도착지';
+  initialCoordinates?: { latitude: number; longitude: number };
 }
 
-export default function LocationSelectModal({ visible, onClose, onSelectLocation, type }: Props) {
-  const [selectedCoord, setSelectedCoord] = useState<{ latitude: number; longitude: number } | null>(null);
+export default function LocationSelectModal({ visible, onClose, onSelectLocation, type, initialCoordinates }: Props) {
+  const [selectedCoord, setSelectedCoord] = useState<{ latitude: number; longitude: number } | null>(initialCoordinates || null);
   const [placeName, setPlaceName] = useState('');
+
+  // 모달이 열릴 때마다 초기 좌표 설정
+  useEffect(() => {
+    if (visible && initialCoordinates) {
+      setSelectedCoord(initialCoordinates);
+      setPlaceName('지도에서 선택된 위치');
+    } else if (visible && !initialCoordinates) {
+      setSelectedCoord(null);
+      setPlaceName('');
+    }
+  }, [visible, initialCoordinates]);
 
   return (
     <Modal
@@ -42,6 +54,7 @@ export default function LocationSelectModal({ visible, onClose, onSelectLocation
 
         <MapView
           style={styles.map}
+          provider={PROVIDER_GOOGLE}
           region={selectedCoord ? {
             ...selectedCoord,
             latitudeDelta: 0.01,
