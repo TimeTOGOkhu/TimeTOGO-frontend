@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Pressable,
   StyleSheet,
   Text, // renderItem 안에서 쓰기 위해 import
 } from 'react-native';
@@ -11,7 +10,14 @@ import Modal from 'react-native-modal';
 import { Calendar } from 'react-native-calendars';
 import WheelPicker from '@quidone/react-native-wheel-picker';
 import { useFontSize } from '@hooks/useFontSize';
-import { TextSize } from '@components/TextSize';
+import {
+TextSmall,
+TextMedium,
+TextXLarge,
+TextXXXLarge,
+TextNormal,
+} from "@components/TextSize";
+import PressableOpacity from "@/components/PressableOpacity";
 
 type Props = {
   visible: boolean;
