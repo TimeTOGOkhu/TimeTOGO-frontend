@@ -1,6 +1,7 @@
 import { useFontSize } from '@hooks/useFontSize';
 import { useTranslation } from '@hooks/useTranslation';
 import Feather from '@expo/vector-icons/Feather';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Tabs } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -16,8 +17,8 @@ export default function TabLayout() {
             let iconName;
             if (route.name === 'explore') {
               iconName = 'map';
-            } else if (route.name === 'favorite') {
-              iconName = 'star';
+            } else if (route.name === 'history') {
+              return <MaterialIcons name="history" size={32} color={color} style={{flex:1, right:1, bottom: 2}} />
             } else if (route.name === 'settings') {
               iconName = 'settings';
             }
@@ -27,7 +28,7 @@ export default function TabLayout() {
           tabBarInactiveTintColor: '#94A3B8',
           tabBarLabelStyle: { 
             fontSize: getSize('small'), 
-            fontWeight: 'bold', 
+            fontFamily: 'Pretendard_Bold',
             marginTop: 3 
           },
           tabBarStyle: {
@@ -44,9 +45,9 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="favorite"
+          name="history"
           options={{
-            title: t('favorite'),
+            title: t('history'),
             headerShown: false,
           }}
         />

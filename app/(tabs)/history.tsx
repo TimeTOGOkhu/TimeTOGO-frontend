@@ -1,31 +1,35 @@
-// app/(tabs)/favorite.tsx
+// app/(tabs)/history.tsx
 import React from 'react';
+import { router } from 'expo-router';
 import {
   SafeAreaView,
   View,
   ScrollView,
   StyleSheet,
   Pressable,
+  Text,
 } from 'react-native';
 import {
   TextSmall,
   TextMedium,
   TextXLarge,
 } from '@components/TextSize';
-import { useFavoriteStore } from '@store/favoriteStore';
+import { DynamicIcon } from '@components/DynamicIcon';
+import { useHistoryStore } from '@/store/historyStore';
 import { useCalculationStore } from '@store/calculationStore';
 import { useFontSize } from '@hooks/useFontSize';
-import { DynamicIcon } from '@components/DynamicIcon';
-import { router } from 'expo-router';
+import { useTranslation } from '@hooks/useTranslation';
 
-export default function FavoriteScreen() {
-  const favorites = useFavoriteStore((s) => s.favorites);
-  const removeFavorite = useFavoriteStore((s) => s.removeFavorite);
+export default function HistoryScreen() {
+  const historys = useHistoryStore((s) => s.historys);
+  const removeHistory = useHistoryStore((s) => s.removeHistory);
   const setOrigin = useCalculationStore((s) => s.setOrigin);
   const setDestination = useCalculationStore((s) => s.setDestination);
   const { getSize } = useFontSize();
 
-  const applyFavorite = (item: typeof favorites[0]) => {
+  const { t } = useTranslation();
+
+  const applyHistory = (item: typeof historys[0]) => {
     // 문자열로 저장했던 좌표를 파싱하거나, 필요에 따라
     // StoreLocation 형태로 다시 셋업해 주세요.
     // 예시: setOrigin({ name: item.origin, coordinates: { ... } });
@@ -36,10 +40,10 @@ export default function FavoriteScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <TextXLarge style={styles.title}>즐겨찾기</TextXLarge>
+        <Text style={styles.title}>{t('history')}</Text>
       </View>
       <ScrollView contentContainerStyle={styles.list}>
-        {favorites.map((item, idx) => (
+        {historys.map((item, idx) => (
           <View key={`${item.origin}-${item.destination}`} style={styles.card}>
             {/* 카드 헤더: 제목 + 아이콘 */}
             <View style={styles.cardHeader}>
@@ -47,14 +51,14 @@ export default function FavoriteScreen() {
                 경로 {idx + 1}
               </TextMedium>
               <View style={styles.headerIcons}>
-                <Pressable onPress={() => applyFavorite(item)}>
+                <Pressable onPress={() => applyHistory(item)}>
                   <DynamicIcon
                     name="share"
                     size={getSize('normal')}
                     style={styles.icon}
                   />
                 </Pressable>
-                <Pressable onPress={() => removeFavorite(idx)}>
+                <Pressable onPress={() => removeHistory(idx)}>
                   <DynamicIcon
                     name="x"
                     size={getSize('normal')}
@@ -91,7 +95,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   title: {
-    fontWeight: 'bold',
+    fontSize: 30,
+    fontFamily: 'Pretendard-Bold',
     color: '#3457D5',
     textAlign: 'center',
   },

@@ -15,7 +15,7 @@ import PressableOpacity from "@/components/PressableOpacity";
 import { useCalculationStore, Location as StoreLocation } from '@store/calculationStore';
 import { calculateRoute } from '@services/routeService';
 import Svg, { Circle } from 'react-native-svg';
-import { useFavoriteStore } from '@store/favoriteStore';
+import { useHistoryStore } from '@store/historyStore';
 import { useTranslation } from '@hooks/useTranslation';
 
 export default function ExploreScreen() {
@@ -155,8 +155,8 @@ export default function ExploreScreen() {
       store.setWeather(weather);
       store.setLoadingFinished();
 
-      // 4) 즐겨찾기에 저장
-      useFavoriteStore.getState().addFavorite({
+      // 4) 이전 기록에 저장
+      useHistoryStore.getState().addHistory({
         origin: getLocationString(origin),
         destination: getLocationString(destination),
         travelTime: route.duration, // 초 단위
@@ -191,7 +191,7 @@ export default function ExploreScreen() {
         <View style={styles.container} >
           {/* 헤더 */}
           <View style={[styles.header, { alignItems: 'center', justifyContent: 'center' }]}>
-            <Text style={{ fontSize: 35, color: '#3457D5', fontWeight: 'bold', textAlign: 'center' }}>
+            <Text style={{ fontSize: 35, color: '#3457D5', fontFamily:'Pretendard_Bold', textAlign: 'center' }}>
               {guideMsg}
             </Text>
           </View>
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 50,
-    fontWeight: 'bold',
+    fontFamily: 'Pretendard-Bold',
     color: '#3457D5',
     textAlign: 'center',
   },

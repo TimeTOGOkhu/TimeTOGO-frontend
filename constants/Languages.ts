@@ -51,7 +51,7 @@ export const TRANSLATIONS = {
     
     // 탭바
     explore: '경로 탐색',
-    favorite: '즐겨찾기',
+    history: '이전 기록',
     tabSettings: '설정',
   },
   en: {
@@ -97,7 +97,7 @@ export const TRANSLATIONS = {
     
     // 탭바
     explore: 'Explore',
-    favorite: 'Favorites',
+    history: 'History',
     tabSettings: 'Settings',
   },
   zh: {
@@ -143,7 +143,7 @@ export const TRANSLATIONS = {
     
     // 탭바
     explore: '路线探索',
-    favorite: '收藏夹',
+    history: '以前的记录',
     tabSettings: '设置',
   },
   ja: {
@@ -189,7 +189,7 @@ export const TRANSLATIONS = {
     
     // 탭바
     explore: 'ルート探索',
-    favorite: 'お気に入り',
+    history: '以前の履歴',
     tabSettings: '設定',
   },
 };

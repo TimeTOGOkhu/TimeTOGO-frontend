@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
     marginVertical: 12,
   },
   colon: {
-    fontWeight: 'bold',
+    fontFamily: 'Pretendard-Bold',
     marginHorizontal: 8,
   },
   confirmBtn: {
