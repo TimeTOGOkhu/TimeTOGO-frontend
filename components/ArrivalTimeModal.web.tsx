@@ -1,18 +1,22 @@
+// components/ArrivalTimeModal.tsx
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
+  Text, // renderItem 안에서 쓰기 위해 import
 } from 'react-native';
-import Modal from 'react-modal';
-import DatePicker from 'react-datepicker';
-import "react-datepicker/dist/react-datepicker.css";
+import Modal from 'react-native-modal';
+import { Calendar } from 'react-native-calendars';
+import WheelPicker from '@quidone/react-native-wheel-picker';
 import { useFontSize } from '@hooks/useFontSize';
 import {
-  TextSmall,
-  TextMedium,
-  TextXLarge,
-  TextNormal,
-  TextLarge,
+TextSmall,
+TextMedium,
+TextXLarge,
+TextXXXLarge,
+TextNormal,
+TextLarge,
 } from "@components/TextSize";
 import PressableOpacity from "@/components/PressableOpacity";
 
@@ -23,10 +27,7 @@ type Props = {
   onCancel: () => void;
 };
 
-// 웹용 모달 스타일 설정
-if (typeof window !== 'undefined') {
-  Modal.setAppElement('body'); // body로 변경하여 더 안전하게
-}
+type PickerItem<T> = { label: string; value: T };
 
 export default function ArrivalTimeModal({
   visible,
@@ -36,233 +37,286 @@ export default function ArrivalTimeModal({
 }: Props) {
   const now = new Date();
   const defaultDate = initial ?? now;
+
+  // useFontSize 훅으로 현재 설정된 폰트 크기를 가져옴
   const { getSize } = useFontSize();
 
-  const [selectedDateTime, setSelectedDateTime] = useState<Date>(defaultDate);
+  const [selectedDate, setSelectedDate] = useState<Date>(defaultDate);
+  const [period, setPeriod] = useState<'AM' | 'PM'>(
+    defaultDate.getHours() < 12 ? 'AM' : 'PM'
+  );
+  const [hour, setHour] = useState<number>(defaultDate.getHours() % 12 || 12);
+  const [minute, setMinute] = useState<number>(defaultDate.getMinutes());
+  const [activeTab, setActiveTab] = useState<'date' | 'time' | null>(null);
 
   useEffect(() => {
     if (!visible) {
-      setSelectedDateTime(defaultDate);
+      // 모달이 닫히면 상태 초기화
+      setActiveTab(null);
+      setSelectedDate(defaultDate);
+      setPeriod(defaultDate.getHours() < 12 ? 'AM' : 'PM');
+      setHour(defaultDate.getHours() % 12 || 12);
+      setMinute(defaultDate.getMinutes());
     }
   }, [visible, defaultDate]);
 
-  // 웹용 DatePicker 커스텀 스타일을 동적으로 추가
-  useEffect(() => {
-    if (typeof window !== 'undefined' && visible) {
-      // 기존 스타일 제거
-      const existingStyle = document.getElementById('custom-datepicker-style');
-      if (existingStyle) {
-        existingStyle.remove();
-      }
-
-      // 새 스타일 추가
-      const style = document.createElement('style');
-      style.id = 'custom-datepicker-style';
-      style.textContent = `
-        .custom-datepicker {
-          font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif !important;
-          border: none !important;
-          box-shadow: none !important;
-        }
-        
-        .react-datepicker__header {
-          background-color: #3457D5 !important;
-          border-bottom: none !important;
-        }
-        
-        .react-datepicker__current-month,
-        .react-datepicker__day-name {
-          color: white !important;
-          font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif !important;
-        }
-        
-        .react-datepicker__day--selected {
-          background-color: #3457D5 !important;
-        }
-        
-        .react-datepicker__day--selected:hover {
-          background-color: #2845C7 !important;
-        }
-        
-        .react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box {
-          width: 120px !important;
-        }
-
-        .react-datepicker__time-list-item {
-          font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif !important;
-        }
-
-        .react-datepicker__time-list-item--selected {
-          background-color: #3457D5 !important;
-        }
-      `;
-      document.head.appendChild(style);
-
-      // 컴포넌트 언마운트 시 스타일 제거
-      return () => {
-        const styleElement = document.getElementById('custom-datepicker-style');
-        if (styleElement) {
-          styleElement.remove();
-        }
-      };
-    }
-  }, [visible]);
-
-  const handleConfirm = () => {
-    onConfirm(selectedDateTime);
+  const handleConfirmAll = () => {
+    const d = new Date(selectedDate);
+    let h24 = hour % 12 + (period === 'PM' ? 12 : 0);
+    if (h24 === 24) h24 = 12; // 12 AM/PM 예외 처리
+    d.setHours(h24, minute, 0, 0);
+    onConfirm(d);
     onCancel();
   };
 
-  const formatKoreanDate = (date: Date) => {
-    const y = date.getFullYear();
-    const m = date.getMonth() + 1;
-    const d = date.getDate();
-    const h = date.getHours();
-    const min = String(date.getMinutes()).padStart(2, '0');
-    const period = h < 12 ? '오전' : '오후';
-    const h12 = h % 12 === 0 ? 12 : h % 12;
-    return `${y}년 ${m}월 ${d}일 ${period} ${h12}:${min}`;
+  const handleDayPress = (day: { timestamp: number }) => {
+    setSelectedDate(new Date(day.timestamp));
   };
+
+  // Picker 데이터 정의
+  const periodItems: PickerItem<'AM' | 'PM'>[] = [
+    { label: '오전', value: 'AM' },
+    { label: '오후', value: 'PM' },
+  ];
+  const hourItems: PickerItem<number>[] = Array.from({ length: 12 }, (_, i) => ({
+    label: String(i + 1),
+    value: i + 1,
+  }));
+  const minuteItems: PickerItem<number>[] = Array.from({ length: 60 }, (_, i) => ({
+    label: String(i).padStart(2, '0'),
+    value: i,
+  }));
+
+  const dateText = `${selectedDate.getFullYear()}년 ${selectedDate.getMonth() + 1}월 ${selectedDate.getDate()}일`;
+  const timeText = `${period === 'AM' ? '오전' : '오후'} ${hour}:${String(minute).padStart(2, '0')}`;
 
   return (
     <Modal
-      isOpen={visible}
-      onRequestClose={onCancel}
-      style={{
-        overlay: {
-          backgroundColor: 'rgba(0, 0, 0, 0.3)',
-          zIndex: 1000,
-        },
-        content: {
-          top: '50%',
-          left: '50%',
-          right: 'auto',
-          bottom: 'auto',
-          marginRight: '-50%',
-          transform: 'translate(-50%, -50%)',
-          borderRadius: '12px',
-          padding: '0',
-          border: 'none',
-          maxWidth: '400px',
-          width: '90%',
-          maxHeight: '80vh',
-          overflow: 'auto',
-          fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, sans-serif',
-        },
-      }}
+      isVisible={visible}
+      onBackdropPress={onCancel}
+      backdropOpacity={0.3}
+      style={styles.modal}
     >
       <View style={styles.container}>
-        {/* 헤더 */}
-        <View style={styles.header}>
-          <TextXLarge style={styles.headerText}>
-            도착 시간 설정
-          </TextXLarge>
+        {/* 헤더: TextSize로 동적 폰트 크기 적용 */}
+        <TextXLarge style={styles.header}>
+          도착 시간 설정
+        </TextXLarge>
+
+        <View style={styles.fieldRow}>
+          {/* 날짜 필드 */}
+          <PressableOpacity style={styles.field} onPress={() => setActiveTab('date')}>
+            <TextSmall style={styles.fieldLabel}>
+              날짜
+            </TextSmall>
+            <TextNormal style={styles.fieldValue}>
+              {dateText}
+            </TextNormal>
+          </PressableOpacity>
+
+          {/* 시간 필드 */}
+          <PressableOpacity style={styles.field} onPress={() => setActiveTab('time')}>
+            <TextSmall style={styles.fieldLabel}>
+              시간
+            </TextSmall>
+            <TextNormal style={styles.fieldValue}>
+              {timeText}
+            </TextNormal>
+          </PressableOpacity>
         </View>
 
-        {/* 현재 선택된 시간 표시 */}
-        <View style={styles.selectedTimeContainer}>
-          <TextSmall style={styles.fieldLabel}>
-            선택된 시간
-          </TextSmall>
-          <TextLarge style={styles.selectedTimeText}>
-            {formatKoreanDate(selectedDateTime)}
-          </TextLarge>
-        </View>
-
-        {/* 웹용 DatePicker */}
-        <View style={styles.datePickerContainer}>
-          <DatePicker
-            selected={selectedDateTime}
-            onChange={(date) => date && setSelectedDateTime(date)}
-            showTimeSelect
-            timeFormat="HH:mm"
-            timeIntervals={5}
-            timeCaption="시간"
-            dateFormat="yyyy년 MM월 dd일 HH:mm"
-            minDate={now}
-            inline
-            calendarClassName="custom-datepicker"
+        {/* 날짜 선택 캘린더 */}
+        {activeTab === 'date' && (
+          <Calendar
+            minDate={now.toISOString().split('T')[0]}
+            onDayPress={handleDayPress}
+            markedDates={{
+              [selectedDate.toISOString().split('T')[0]]: {
+                selected: true,
+                selectedColor: '#4169E1',
+              },
+            }}
+            theme={{
+              todayTextColor: '#4169E1',
+              arrowColor: '#4169E1',
+              // 달력 내부 글꼴 크기도 동적으로 조절
+              textDayFontSize: getSize('normal'),
+              textMonthFontSize: getSize('large'),
+              textDayHeaderFontSize: getSize('small'),
+            }}
+            style={styles.calendar}
           />
-        </View>
+        )}
 
-        {/* 버튼들 */}
-        <View style={styles.buttonContainer}>
-          <PressableOpacity style={styles.cancelButton} onPress={onCancel}>
-            <TextMedium style={styles.cancelButtonText}>
-              취소
-            </TextMedium>
-          </PressableOpacity>
-          
-          <PressableOpacity style={styles.confirmButton} onPress={handleConfirm}>
-            <TextMedium style={styles.confirmButtonText}>
-              확인
-            </TextMedium>
-          </PressableOpacity>
-        </View>
+        {/* 시간 선택 다이얼 */}
+        {activeTab === 'time' && (
+          <View style={styles.wheelSection}>
+            {/* 오전/오후 Picker */}
+            <WheelPicker
+              data={periodItems}
+              value={period}
+              itemHeight={50}
+              visibleItemCount={3}
+              width={80}
+              onValueChanging={({ item }: { item: PickerItem<'AM' | 'PM'> }) =>
+                setPeriod(item.value)
+              }
+              onValueChanged={({ item }: { item: PickerItem<'AM' | 'PM'> }) =>
+                setPeriod(item.value)
+              }
+              // renderItem을 통해 선택된 아이템만 크게, 나머지는 기본 크기로 렌더링
+              renderItem={({ item }: { item: PickerItem<'AM' | 'PM'> }) => (
+                <Text
+                  style={{
+                    fontSize:
+                      item.value === period
+                        ? getSize('large')
+                        : getSize('normal'),
+                    textAlign: 'center',
+                  }}
+                >
+                  {item.label}
+                </Text>
+              )}
+            />
+
+            <View style={{ width: 16 }} />
+
+            {/* 시(hour) Picker */}
+            <WheelPicker
+              data={hourItems}
+              value={hour}
+              itemHeight={50}
+              visibleItemCount={3}
+              width={80}
+              onValueChanging={({ item }: { item: PickerItem<number> }) =>
+                setHour(item.value)
+              }
+              onValueChanged={({ item }: { item: PickerItem<number> }) =>
+                setHour(item.value)
+              }
+              renderItem={({ item }: { item: PickerItem<number> }) => (
+                <Text
+                  style={{
+                    fontSize:
+                      item.value === hour ? getSize('large') : getSize('normal'),
+                    textAlign: 'center',
+                  }}
+                >
+                  {item.label}
+                </Text>
+              )}
+            />
+
+            {/* 콜론(:) */}
+            <TextLarge style={styles.colon}>
+              :
+            </TextLarge>
+
+            {/* 분(minute) Picker */}
+            <WheelPicker
+              data={minuteItems}
+              value={minute}
+              itemHeight={50}
+              visibleItemCount={3}
+              width={80}
+              onValueChanging={({ item }: { item: PickerItem<number> }) =>
+                setMinute(item.value)
+              }
+              onValueChanged={({ item }: { item: PickerItem<number> }) =>
+                setMinute(item.value)
+              }
+              renderItem={({ item }: { item: PickerItem<number> }) => (
+                <Text
+                  style={{
+                    fontSize:
+                      item.value === minute
+                        ? getSize('large')
+                        : getSize('normal'),
+                    textAlign: 'center',
+                  }}
+                >
+                  {item.label}
+                </Text>
+              )}
+            />
+          </View>
+        )}
+
+        {/* 확인 버튼 */}
+        <PressableOpacity style={styles.confirmBtn} onPress={handleConfirmAll}>
+          <TextMedium style={styles.confirmText}>
+            확인
+          </TextMedium>
+        </PressableOpacity>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  modal: {
+    justifyContent: 'center',
+    margin: 0,
+  },
   container: {
     backgroundColor: '#fff',
+    marginHorizontal: 20,
     borderRadius: 12,
     overflow: 'hidden',
   },
   header: {
+    fontWeight: '600',
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
-  headerText: {
-    fontFamily: 'Pretendard_Bold',
-    textAlign: 'center',
-    color: '#1F2937',
+  fieldRow: {
+    flexDirection: 'column',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    width: '100%',
   },
-  selectedTimeContainer: {
-    padding: 16,
-    backgroundColor: '#F8F9FA',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+  field: {
+    height: 56,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginVertical: 8,
+    width: '100%',
   },
   fieldLabel: {
-    color: '#6B7280',
-    marginBottom: 4,
-    fontFamily: 'Pretendard_Medium',
+    color: '#666',
+    marginRight: 8,
   },
-  selectedTimeText: {
-    color: '#3457D5',
-    fontFamily: 'Pretendard_Bold',
+  fieldValue: {
+    flex: 1,
+    color: '#000',
   },
-  datePickerContainer: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  buttonContainer: {
-    flexDirection: 'row',
+  calendar: {
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderBottomWidth: 1,
+    borderColor: '#eee',
   },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 16,
+  wheelSection: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    borderRightWidth: 1,
-    borderRightColor: '#E5E7EB',
+    marginVertical: 12,
   },
-  cancelButtonText: {
-    color: '#6B7280',
-    fontFamily: 'Pretendard_Medium',
-  },
-  confirmButton: {
-    flex: 1,
-    paddingVertical: 16,
-    alignItems: 'center',
-    backgroundColor: '#3457D5',
-  },
-  confirmButtonText: {
-    color: '#fff',
+  colon: {
     fontFamily: 'Pretendard_Bold',
+    marginHorizontal: 8,
+  },
+  confirmBtn: {
+    backgroundColor: '#4169E1',
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  confirmText: {
+    color: '#fff',
+    fontWeight: '600',
   },
 });
