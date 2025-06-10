@@ -259,6 +259,7 @@ export default function ResultScreen() {
     return (
       <View style={{ marginVertical: 16 }}>
         {transitSteps.map((step, idx) => (
+          (() => { console.log('transit step:', step); return null; })(),
           <View
             key={idx}
             style={{
@@ -284,6 +285,7 @@ export default function ResultScreen() {
             <View style={{ flex: 1 }}>
               <TextMedium style={{ fontFamily: "Pretendard_Bold", fontSize: 16, color: "#222" }}>
                 {step.line_name}
+                {step.short_name ? ` (${step.short_name})` : ""}
               </TextMedium>
               <TextSmall style={{ color: "#666", marginTop: 2 }}>
                 {step.departure_stop} ({step.departure_time}) → {step.arrival_stop} ({step.arrival_time})
