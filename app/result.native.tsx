@@ -546,6 +546,11 @@ export default function ResultScreen() {
             <View style={{ flex: 1 }}>
               <TextMedium style={{ fontFamily: "Pretendard_Bold", fontSize: 16, color: "#222" }}>
                 {step.line_name}
+                {step.short_name && (
+                  <TextMedium style={{ fontFamily: "Pretendard_Bold", fontSize: 14, color: "#666", marginLeft: 4 }}>
+                    ({step.short_name})
+                  </TextMedium>
+                )}
               </TextMedium>
               <TextSmall style={{ color: "#666", marginTop: 2 }}>
                 {step.departure_stop} ({step.departure_time}) → {step.arrival_stop} ({step.arrival_time})
