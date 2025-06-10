@@ -3,6 +3,7 @@ import { useCalculationStore } from '@store/calculationStore';
 import { useHistoryStore } from '@store/historyStore';
 import { LatLng } from 'react-native-maps';
 import { Location as StoreLocation } from '@store/calculationStore';
+import { Platform } from 'react-native';
 
 // 람다 함수 응답 타입 정의
 interface WeatherCondition {
@@ -52,8 +53,17 @@ interface CalculateRouteParams {
   arrival_time: string; // 유닉스 타임스탬프 문자열
 }
 
-// Lambda 함수 API 엔드포인트
-const API_BASE_URL = 'http://172.21.16.196:5001/lambda';
+const getApiBaseUrl = () => {
+  if (Platform.OS === 'web') {
+    // 웹에서는 localhost 사용
+    return 'http://localhost:5001/lambda';
+  } else {
+    // 모바일 앱에서는 기존 IP 사용
+    return 'http://172.21.16.196:5001/lambda';
+  }
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 const fetchWithTimeout = async (url: string, options = {}, timeout = 5000) => {
   const controller = new AbortController();
