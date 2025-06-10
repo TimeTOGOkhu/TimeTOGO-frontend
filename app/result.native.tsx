@@ -821,6 +821,24 @@ export default function ResultScreen() {
         <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false} bounces={true}>
           {/* 상단 메시지 */}
           <View style={styles.header}>
+            {/* 좌측 상단 회색 뒤로가기 아이콘(상자/글자 없이) */}
+            <Pressable
+              style={styles.backIconOnly}
+              onPress={handleBackPress}
+              hitSlop={10}
+            >
+              <DynamicIcon name="arrow-left" size={22} color="#888" />
+            </Pressable>
+            {/* 우측 상단 공유 버튼(링크 아이콘, 연결X) */}
+            <Pressable
+              style={styles.shareIconOnly}
+              onPress={() => {
+                Alert.alert("공유 기능", "연결 예정입니다.");
+              }}
+              hitSlop={10}
+            >
+              <DynamicIcon name="link" size={22} color="#888" />
+            </Pressable>
             {isNavigationStarted && currentWalkingInstruction && navigationMode === 'walking' ? (
               // 도보 안내 문구일 때
               <TextXXXLarge style={{ 
@@ -1024,6 +1042,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderBottomColor: '#C6C8C9',
     borderBottomWidth: 1,
+    position: 'relative',
   },
   title: {
     color: "#3457D5",
@@ -1347,5 +1366,27 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(232, 240, 254, 0.95)',
     borderWidth: 2,
     borderColor: '#3457D5',
+  },
+  backIconOnly: {
+    position: 'absolute',
+    left: 8,
+    top: 8,
+    zIndex: 10,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    padding: 0,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  shareIconOnly: {
+    position: 'absolute',
+    right: 8,
+    top: 8,
+    zIndex: 10,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    padding: 0,
+    elevation: 0,
+    shadowOpacity: 0,
   },
 });
