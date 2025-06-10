@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -6,7 +6,6 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -22,8 +21,9 @@ import { DynamicIcon } from "@components/DynamicIcon";
 import { TransportIcon } from "@components/TransportIcon";
 import PressableOpacity from "@/components/PressableOpacity";
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
-import { decodePolygon } from "@/services/routeService";
+import { decodePolygon, extractTMapCoordinates } from "@/services/routeService";
 import * as Location from 'expo-location';
+import haversine from 'haversine';
 
 // 네이버맵 스타일러 추천 스타일(밝고 심플, 주요 도로/철도/공원/수역 강조, 불필요한 요소 최소화)
 const mapStyle = [
@@ -118,12 +118,27 @@ function delay(time: number) {
   return new Promise(resolve => setTimeout(resolve, time));
 };
 
+// 두 지점 간의 거리를 계산하는 함수 (미터 단위)
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const a = { latitude: lat1, longitude: lon1 };
+  const b = { latitude: lat2, longitude: lon2 };
+  return haversine(a, b, { unit: 'meter' });
+};
+
 const SMOOTHING_FACTOR = 0.2;  // EMA 계수
 const MAX_DELTA = 5;         // 한 프레임당 최대 회전량(°)
 
 export default function ResultScreen() {
   const mapRef = React.useRef<MapView>(null);
   const lastSmoothed = React.useRef(0);
+  const [isFollowingUser, setIsFollowingUser] = useState<boolean>(false);
+  const locationSubscription = React.useRef<Location.LocationSubscription | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const currentLocationRef = React.useRef<{ latitude: number; longitude: number } | null>(null);
+  const [isNavigationStarted, setIsNavigationStarted] = useState<boolean>(false);
+  const isNavigationStartedRef = React.useRef(false);
+  const [currentWalkingInstruction, setCurrentWalkingInstruction] = useState<string | null>(null);
+  const [walkingRoutes, setWalkingRoutes] = useState<Record<number, any>>({});
   
   const mapViewLoaded = async() => {
     await delay(1000);
@@ -159,29 +174,116 @@ export default function ResultScreen() {
         lastSmoothed.current = newHeading;
 
         // 4) 카메라 업데이트
-        mapRef.current?.animateCamera(
-            { heading: newHeading },
-            { duration: 150 }
-          );
+        // mapRef.current?.animateCamera(
+        //     { heading: newHeading },
+        //     { duration: 150 }
+        //   );
       });
     })();
 
     return () => {
       // 컴포넌트 언마운트 시 구독 해제
-      subscription?.remove();
+      // 위치 추적 구독도 해제
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+        locationSubscription.current = null;
+      }
+      setIsFollowingUser(false);
     };
   }, []);
 
+  const setCurrentLocationBoth = (location: { latitude: number; longitude: number }) => {
+    setCurrentLocation(location);
+    currentLocationRef.current = location;
+  };
+
+  // 위치 추적 함수
   const goToMyLocation = async () => {
-    const { coords } = await Location.getCurrentPositionAsync();
-    mapRef.current?.animateCamera({
-      center: {
+    // 현재 위치로 한 번 이동
+    try {
+      const { coords } = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High
+      });
+      
+      setCurrentLocation({
         latitude: coords.latitude,
-        longitude: coords.longitude,
-      },
-      pitch: 90,
-      zoom: 18.5
-    }, { duration: 300 });
+        longitude: coords.longitude
+      });
+      
+      mapRef.current?.animateCamera({
+        center: {
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+        },
+        // pitch: 90,
+        zoom: 18.5
+      }, { duration: 300 });
+      
+      // 위치 추적 활성화
+      setIsFollowingUser(true);
+      
+      // 위치 구독 시작
+      locationSubscription.current = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          distanceInterval: 10, // 10미터마다 업데이트
+          timeInterval: 1000     // 최소 5초마다 업데이트
+        },
+        (location) => {
+          const newLocation = {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude
+          };
+          setCurrentLocationBoth(newLocation);
+          // 출발지에서 10m 이상 벗어났는지 확인
+          if (origin && !isNavigationStartedRef.current) {
+            const distanceFromOrigin = calculateDistance(
+              location.coords.latitude,
+              location.coords.longitude,
+              origin.coordinates.latitude,
+              origin.coordinates.longitude
+            );
+            if (distanceFromOrigin >= 10) {
+              setIsNavigationStarted(true);
+              isNavigationStartedRef.current = true;
+              console.log('네비게이션 시작: 출발지에서 10m 이상 이동');
+            }
+          }
+          // 네비게이션이 시작되었고 도보 경로가 있을 때 안내 문구 업데이트
+          if (isNavigationStartedRef.current) {
+            updateWalkingInstruction(newLocation);
+          }
+          // 위치 추적 상태일 때만 카메라 이동
+          if (mapRef.current) {
+            mapRef.current.animateCamera({
+              center: {
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+              },
+              // pitch: 90,
+            }, { duration: 300 });
+          }
+        }
+      );
+    } catch (error) {
+      console.error('위치 추적 에러:', error);
+      Alert.alert('위치 추적 실패', '현재 위치를 가져올 수 없습니다.');
+    }
+  };
+
+  // 도보 안내 문구 업데이트 함수
+  const updateWalkingInstruction = (currentPos: { latitude: number; longitude: number }) => {
+    if (!route?.steps || !walkingRoutes) return;
+    for (let i = 0; i < route.steps.length; i++) {
+      const step = route.steps[i];
+      if (step.mode === 'WALKING' && walkingRoutes[i]) {
+        const instruction = getTMapWalkingInstruction(i);
+        if (instruction) {
+          setCurrentWalkingInstruction(instruction);
+          return;
+        }
+      }
+    }
   };
 
   // Zustand 스토어에서 계산 결과 가져오기
@@ -266,6 +368,84 @@ export default function ResultScreen() {
       ]);
     }
   }, [route, isLoading, error]);
+  
+  // 위치 추적 상태가 변경될 때 구독 관리
+  useEffect(() => {
+    // 위치 추적이 비활성화되면 구독 해제
+    if (!isFollowingUser) {
+      if (locationSubscription.current) {
+        console.log('위치 추적 구독 해제');
+        locationSubscription.current.remove();
+        locationSubscription.current = null;
+      }
+      setCurrentLocation(null);
+      setIsNavigationStarted(false);
+      setCurrentWalkingInstruction(null);
+    }
+    else{
+      goToMyLocation(); 
+    }
+  }, [isFollowingUser]);
+
+  useEffect(() => {
+    // 경로가 로드되고 도보 경로가 있는지 확인
+    const fetchTMapWalkingRoutes = async () => {
+      if (route?.steps && !isLoading) {
+        const walkingSteps = route.steps.filter(step => step.mode === 'WALKING');
+        console.log(`도보 경로 ${walkingSteps.length}개 발견`);
+        
+        if (walkingSteps.length > 0) {
+          const newWalkingRoutes: Record<number, any> = {};
+          
+          // 각 도보 경로에 대해 TMap API 호출
+          for (let i = 0; i < route.steps.length; i++) {
+            const step = route.steps[i];
+            if (step.mode === 'WALKING') {
+              console.log(`도보 경로 ${i} 처리 중: ${step.start_location.lat},${step.start_location.lng} → ${step.end_location.lat},${step.end_location.lng}`);
+              
+              const { fetchWalkingRoute } = await import('@/services/routeService');
+              const origin = {
+                latitude: step.start_location.lat,
+                longitude: step.start_location.lng
+              };
+              const destination = {
+                latitude: step.end_location.lat,
+                longitude: step.end_location.lng
+              };
+              
+              try {
+                const tMapRoute = await fetchWalkingRoute(origin, destination);
+                if (tMapRoute) {
+                  console.log(`TMap 도보 경로 ${i} 성공:`, tMapRoute.features.length, '피처');
+                  newWalkingRoutes[i] = tMapRoute;
+                } else {
+                  console.log(`TMap 도보 경로 ${i} 실패: 데이터 없음`);
+                }
+              } catch (error) {
+                console.error(`TMap 도보 경로 ${i} 오류:`, error);
+              }
+            }
+          }
+          
+          if (Object.keys(newWalkingRoutes).length > 0) {
+            console.log(`총 ${Object.keys(newWalkingRoutes).length}개 TMap 도보 경로 로드됨`);
+            setWalkingRoutes(newWalkingRoutes);
+            setIsFollowingUser(true);
+          }
+        }
+      }
+      
+    };
+    
+    fetchTMapWalkingRoutes();
+  }, [isLoading]);
+
+  useEffect(() => {
+    isNavigationStartedRef.current = isNavigationStarted;
+    if (!isNavigationStarted || !currentLocation) return;
+
+    updateWalkingInstruction(currentLocation!);
+  }, [isNavigationStarted]);
 
   const handleBackPress = () => {
     router.back(); // 이전 화면으로 돌아가기
@@ -284,6 +464,7 @@ export default function ResultScreen() {
   // 상단 안내 메시지 생성
   const getTopMessage = () => {
     if (!route) return null;
+    
     const time = formatTime(route.departureTime);
     if (weather?.condition === "rainy" || weather?.condition === "cloudy") {
       return { 
@@ -580,16 +761,103 @@ export default function ResultScreen() {
     );
   }
 
+  // TMap 기반 도보 상세 안내 텍스트 생성
+  const getTMapWalkingInstruction = (stepIndex: number) => {
+    if (!walkingRoutes[stepIndex] || !currentLocationRef.current) {
+      return null;
+    }
+    const features = walkingRoutes[stepIndex].features;
+    // 주요 turn point만 추출 (turnType이 있는 Point)
+    const turnPoints = features
+      .filter((feature: any) => feature.geometry.type === 'Point' && feature.properties.turnType)
+      .map((feature: any) => ({
+        ...feature,
+        lat: feature.geometry.coordinates[1],
+        lng: feature.geometry.coordinates[0],
+        turnType: feature.properties.turnType,
+        description: feature.properties.description || '',
+      }))
+      .filter((tp: any) => tp.turnType !== 200 && tp.turnType !== 201); // 출발/도착 제외
+
+    if (turnPoints.length === 0) return null;
+    const curLat = currentLocationRef.current.latitude;
+    const curLng = currentLocationRef.current.longitude;
+
+    let foundIdx = -1;
+    for (let i = 0; i < turnPoints.length - 1; i++) {
+      const x1 = turnPoints[i].lng, y1 = turnPoints[i].lat;
+      const x2 = turnPoints[i+1].lng, y2 = turnPoints[i+1].lat;
+      const x0 = curLng, y0 = curLat;
+      const dx = x2 - x1, dy = y2 - y1;
+      const len2 = dx*dx + dy*dy;
+      if (len2 === 0) continue;
+      const t = ((x0 - x1) * dx + (y0 - y1) * dy) / len2;
+      if (t >= 0 && t <= 1) {
+        foundIdx = i+1;
+        break;
+      }
+    }
+    let nextTurn;
+    if (foundIdx !== -1) {
+      nextTurn = turnPoints[foundIdx];
+    } else {
+      // 선분 위에 없으면 가장 가까운 turn point 안내
+      let minDist = Infinity, minIdx = 0;
+      for (let i = 0; i < turnPoints.length; i++) {
+        const d = calculateDistance(curLat, curLng, turnPoints[i].lat, turnPoints[i].lng);
+        if (d < minDist) {
+          minDist = d;
+          minIdx = i;
+        }
+      }
+      nextTurn = turnPoints[minIdx];
+    }
+    const distance = calculateDistance(curLat, curLng, nextTurn.lat, nextTurn.lng);
+    let direction = '방향';
+    switch (nextTurn.turnType) {
+      case 11: direction = '직진'; break;
+      case 12: direction = '좌회전'; break;
+      case 13: direction = '우회전'; break;
+      case 14: direction = '유턴'; break;
+      case 16: direction = '8시 방향'; break;
+      case 17: direction = '10시 방향'; break;
+      case 18: direction = '2시 방향'; break; 
+      case 19: direction = '4시 방향'; break;
+      case 125: direction = '육교'; break;
+      case 126: direction = '지하보도'; break;
+      case 211: direction = '횡단보도'; break;
+      case 212: direction = '좌측 횡단보도'; break;
+      case 213: direction = '우측 횡단보도'; break;
+      case 214: direction = '8시 방향 횡단보도'; break;
+      case 215: direction = '10시 방향 횡단보도'; break;
+      case 216: direction = '2시 방향 횡단보도'; break;
+      case 217: direction = '4시 방향 횡단보도'; break;
+      default: direction = '직진';
+    }
+    const distText = `${Math.round(distance)}m 앞`;
+    return `${distText} ${direction}`;
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.container}>
         <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false} bounces={true}>
           {/* 상단 메시지 */}
           <View style={styles.header}>
-            {getTopMessage() && (
+            {isNavigationStarted && currentWalkingInstruction ? (
+              // 도보 안내 문구일 때
+              <TextXXXLarge style={{ 
+                color: "#3457D5", 
+                fontFamily: "Pretendard_Bold", 
+                textAlign: "center",
+              }}>
+                {currentWalkingInstruction}
+              </TextXXXLarge>
+            ) : getTopMessage() && (
+              // 기본 출발 메시지일 때
               <>
                 <TextXXXLarge style={{ color: "#3457D5", fontFamily: "Pretendard_ExtraBold", marginBottom: 4, textAlign: "center" }}>
-                  {getTopMessage() ? getTopMessage()!.time : ""}
+                  {getTopMessage()!.time}
                 </TextXXXLarge>
                 <TextXLarge style={{ color: "#3457D5", fontFamily: "Pretendard_Bold", textAlign: "center" }}>
                   {getTopMessage()!.message}
@@ -609,6 +877,7 @@ export default function ResultScreen() {
             <MapView
               ref={mapRef}
               showsUserLocation={true}
+              showsMyLocationButton={false}
               provider={PROVIDER_GOOGLE}
               style={styles.mapPlaceholder}
               region={{
@@ -645,22 +914,38 @@ export default function ResultScreen() {
               {route?.steps && route.steps.map((step, index) => (
                 <React.Fragment key={`polyline-${index}`}>
                   {step.start_location && step.end_location && (
-                    <Polyline
-                      coordinates={[
-                        ...decodePolygon(step.polyline || ""),
-                      ]}
-                      strokeColor={step.mode === 'WALKING' ? '#2563EB' : getPolylineColor(step.vehicle_type)}
-                      strokeWidth={5}
-                      fillColor={step.mode === 'WALKING' ? '#2563EB' : getPolylineColor(step.vehicle_type)}
-                    />
+                    step.mode === 'WALKING' && walkingRoutes[index] ? (
+                      <Polyline
+                        coordinates={extractTMapCoordinates(walkingRoutes[index])}
+                        strokeColor={'#2563EB'}
+                        strokeWidth={5}
+                        fillColor={'#2563EB'}
+                      />
+                    ) : (
+                      <Polyline
+                        coordinates={[
+                          ...decodePolygon(step.polyline || ""),
+                        ]}
+                        strokeColor={step.mode === 'WALKING' ? '#2563EB' : getPolylineColor(step.vehicle_type)}
+                        strokeWidth={5}
+                        fillColor={step.mode === 'WALKING' ? '#2563EB' : getPolylineColor(step.vehicle_type)}
+                      />
+                    )
                   )}
                 </React.Fragment>
               ))}
             </MapView>
             <PressableOpacity
-              style={styles.myLocationBtn}
-              onPress={goToMyLocation}>
-                <Image source={require('../assets/images/TimeTOGO.png')} style={{ width: 32, height: 32 }}/>
+              style={[
+                styles.myLocationBtn,
+                isFollowingUser && styles.myLocationBtnActive
+              ]}
+              onPress={() => setIsFollowingUser(!isFollowingUser)}>
+                <DynamicIcon
+                  name={isFollowingUser ? "navigation" : "crosshair"}
+                  size={24}
+                  color={isFollowingUser ? "#3457D5" : "#333"}
+                />
             </PressableOpacity>
           </View>
 
@@ -1038,10 +1323,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.9)',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4, // Android 그림자
+    borderWidth: 2,
+    borderColor: '#333',
     shadowColor: '#000', // iOS 그림자
     shadowOpacity: 0.3,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
+  },
+  myLocationBtnActive: {
+    backgroundColor: 'rgba(232, 240, 254, 0.95)',
+    borderWidth: 2,
+    borderColor: '#3457D5',
   },
 });
