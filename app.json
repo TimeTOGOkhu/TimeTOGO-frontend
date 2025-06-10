@@ -22,7 +22,16 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "TimeTOGO - 시간 맞춤 경로 안내",
+      "shortName": "TimeTOGO",
+      "lang": "ko",
+      "scope": "/",
+      "themeColor": "#3457D5",
+      "backgroundColor": "#ffffff",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/"
     },
     "plugins": [
       "expo-router",

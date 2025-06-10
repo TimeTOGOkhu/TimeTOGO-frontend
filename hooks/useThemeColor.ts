@@ -11,11 +11,15 @@ export function useThemeColor(
   colorName: keyof typeof Colors.light & keyof typeof Colors.dark
 ) {
   const theme = useColorScheme() ?? 'light';
-  const colorFromProps = props[theme];
+  
+  // 🔧 수정: 타입 가드를 사용하여 theme이 유효한 키인지 확인
+  const colorFromProps = theme in props ? props[theme as keyof typeof props] : undefined;
 
   if (colorFromProps) {
     return colorFromProps;
   } else {
-    return Colors[theme][colorName];
+    // 🔧 수정: theme이 'light' 또는 'dark'인지 확인하고 안전하게 접근
+    const validTheme = theme === 'dark' ? 'dark' : 'light';
+    return Colors[validTheme][colorName];
   }
 }

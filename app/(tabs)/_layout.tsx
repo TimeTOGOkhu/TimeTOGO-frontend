@@ -1,3 +1,4 @@
+// app/(tabs)/_layout.tsx
 import { useFontSize } from '@hooks/useFontSize';
 import { useTranslation } from '@hooks/useTranslation';
 import Feather from '@expo/vector-icons/Feather';
