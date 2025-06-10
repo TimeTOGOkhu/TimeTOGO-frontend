@@ -22,18 +22,13 @@ import { DynamicIcon } from "@components/DynamicIcon";
 import PressableOpacity from "@/components/PressableOpacity";
 import { decodePolygon } from "@/services/routeService";
 
-// 동적으로 로딩할 Leaflet 컴포넌트들
-let MapContainer: any = null;
-let TileLayer: any = null;
-let Marker: any = null;
-let Polyline: any = null;
-let Popup: any = null;
-let L: any = null;
+// Google Maps API key - 실제 키로 교체해야 합니다
+const GOOGLE_MAPS_API_KEY = "YOUR_GOOGLE_MAPS_API_KEY";
 
 // 교통수단 유형에 따른 경로 색상 설정
 const getPolylineColor = (vehicleType?: string): string => {
   if (!vehicleType) return "#1D72E8";
-  
+
   switch(vehicleType.toUpperCase()) {
     case 'BUS': return "#4CAF50";
     case 'SUBWAY': return "#FF9800";
@@ -45,11 +40,11 @@ const getPolylineColor = (vehicleType?: string): string => {
   }
 };
 
-// 폴리라인 데이터를 Leaflet 형식으로 변환하는 함수
-const convertToLeafletPositions = (polylineString: string): [number, number][] => {
+// 폴리라인 데이터를 Google Maps 형식으로 변환하는 함수
+const convertToGoogleMapsPositions = (polylineString: string): {lat: number, lng: number}[] => {
   try {
     const decoded = decodePolygon(polylineString);
-    return decoded.map(point => [point.latitude, point.longitude] as [number, number]);
+    return decoded.map(point => ({lat: point.latitude, lng: point.longitude}));
   } catch (error) {
     console.error('폴리라인 디코딩 오류:', error);
     return [];
@@ -65,56 +60,50 @@ export default function ResultScreen() {
   const mapRef = useRef<any>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{latitude: number, longitude: number} | null>(null);
-  
+  const [googleMaps, setGoogleMaps] = useState<any>(null);
+
   // Zustand 스토어에서 계산 결과 가져오기
   const { origin, destination, route, weather, isLoading, error } =
     useCalculationStore();
 
-  // 웹 환경에서 Leaflet 동적 로딩
+  // Google Maps API 로딩
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const loadLeaflet = async () => {
+      const loadGoogleMaps = async () => {
         try {
-          // Leaflet CSS 동적 로딩
-          if (!document.querySelector('link[href*="leaflet.css"]')) {
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-            document.head.appendChild(link);
+          // Google Maps Script 로딩
+          if (!window.google) {
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=geometry`;
+            script.async = true;
+            script.defer = true;
+
+            script.onload = () => {
+              setGoogleMaps(window.google);
+              setMapLoaded(true);
+            };
+
+            script.onerror = () => {
+              console.error('Google Maps API 로딩 실패');
+              setMapLoaded(false);
+            };
+
+            document.head.appendChild(script);
+          } else {
+            setGoogleMaps(window.google);
+            setMapLoaded(true);
           }
-
-          // Leaflet 라이브러리 동적 import
-          const leafletModule = await import('leaflet');
-          L = leafletModule.default;
-
-          // React-Leaflet 컴포넌트들 동적 import
-          const reactLeafletModule = await import('react-leaflet');
-          MapContainer = reactLeafletModule.MapContainer;
-          TileLayer = reactLeafletModule.TileLayer;
-          Marker = reactLeafletModule.Marker;
-          Polyline = reactLeafletModule.Polyline;
-          Popup = reactLeafletModule.Popup;
-
-          // Leaflet 아이콘 설정 (앱과 동일한 아이콘)
-          delete (L.Icon.Default.prototype as any)._getIconUrl;
-          L.Icon.Default.mergeOptions({
-            iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-            iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-          });
-
-          setMapLoaded(true);
         } catch (error) {
-          console.error('Leaflet 로딩 오류:', error);
+          console.error('Google Maps 로딩 오류:', error);
           setMapLoaded(false);
         }
       };
 
-      loadLeaflet();
+      loadGoogleMaps();
     }
   }, []);
 
-  // 웹용 현재 위치 가져오기 (앱과 동일한 기능)
+  // 웹용 현재 위치 가져오기
   useEffect(() => {
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -131,25 +120,93 @@ export default function ResultScreen() {
     }
   }, []);
 
-  // 지도 로딩 후 카메라 애니메이션 (앱과 유사한 효과)
-  const mapViewLoaded = async () => {
-    await delay(1000);
-    if (mapRef.current) {
-      try {
-        const center = origin 
-          ? [origin.coordinates.latitude, origin.coordinates.longitude]
-          : [37.5665, 126.9780];
-        mapRef.current.setView(center, 15);
-      } catch (error) {
-        console.log('지도 애니메이션 오류:', error);
-      }
+  // Google Maps 초기화
+  useEffect(() => {
+    if (mapLoaded && googleMaps && mapRef.current) {
+      initializeMap();
+    }
+  }, [mapLoaded, googleMaps, origin, destination, route]);
+
+  const initializeMap = () => {
+    if (!googleMaps || !mapRef.current) return;
+
+    const center = origin 
+      ? { lat: origin.coordinates.latitude, lng: origin.coordinates.longitude }
+      : { lat: 37.5665, lng: 126.9780 };
+
+    const map = new googleMaps.maps.Map(mapRef.current, {
+      zoom: 16,
+      center: center,
+      mapTypeId: 'roadmap',
+      styles: [
+        {
+          featureType: 'poi',
+          elementType: 'labels',
+          stylers: [{ visibility: 'off' }]
+        }
+      ]
+    });
+
+    // 출발지 마커
+    if (origin) {
+      new googleMaps.maps.Marker({
+        position: { lat: origin.coordinates.latitude, lng: origin.coordinates.longitude },
+        map: map,
+        title: '출발지: ' + origin.name,
+        icon: {
+          url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png'
+        }
+      });
+    }
+
+    // 도착지 마커
+    if (destination) {
+      new googleMaps.maps.Marker({
+        position: { lat: destination.coordinates.latitude, lng: destination.coordinates.longitude },
+        map: map,
+        title: '도착지: ' + destination.name,
+        icon: {
+          url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
+        }
+      });
+    }
+
+    // 경로 폴리라인 그리기
+    if (route?.steps) {
+      route.steps.forEach((step, index) => {
+        if (step.polyline) {
+          const path = convertToGoogleMapsPositions(step.polyline);
+          if (path.length > 0) {
+            new googleMaps.maps.Polyline({
+              path: path,
+              geodesic: true,
+              strokeColor: step.mode === 'WALKING' ? '#2563EB' : getPolylineColor(step.vehicle_type),
+              strokeOpacity: 0.8,
+              strokeWeight: 5,
+              map: map
+            });
+          }
+        }
+      });
+    }
+
+    // 항상 출발지 기준으로 줌 레벨 16 유지
+    if (origin) {
+      map.setCenter({ lat: origin.coordinates.latitude, lng: origin.coordinates.longitude });
+      map.setZoom(16);
+    } else if (destination) {
+      map.setCenter({ lat: destination.coordinates.latitude, lng: destination.coordinates.longitude });
+      map.setZoom(16);
     }
   };
 
-  // 내 위치로 이동 (앱과 동일한 기능)
+  // 내 위치로 이동
   const goToMyLocation = () => {
-    if (currentLocation && mapRef.current) {
-      mapRef.current.setView([currentLocation.latitude, currentLocation.longitude], 18);
+    if (currentLocation && googleMaps && mapRef.current) {
+      const map = new googleMaps.maps.Map(mapRef.current, {
+        zoom: 16,
+        center: { lat: currentLocation.latitude, lng: currentLocation.longitude }
+      });
     }
   };
 
@@ -167,7 +224,7 @@ export default function ResultScreen() {
     router.back();
   };
 
-  // 날짜 포맷팅 함수 (앱과 동일)
+  // 날짜 포맷팅 함수
   const formatTime = (isoString: string) => {
     const date = new Date(isoString);
     const hours = date.getHours();
@@ -177,7 +234,7 @@ export default function ResultScreen() {
     return `${period} ${h12}:${minutes}`;
   };
 
-  // 상단 안내 메시지 생성 (앱과 동일)
+  // 상단 안내 메시지 생성
   const getTopMessage = () => {
     if (!route) return null;
     const time = formatTime(route.departureTime);
@@ -193,7 +250,7 @@ export default function ResultScreen() {
     };
   };
 
-  // 환승 정보 렌더링 (앱과 동일)
+  // 환승 정보 렌더링
   const renderTransferInfo = () => {
     if (!route?.steps) return null;
     const transitSteps = route.steps.filter(step => step.mode === 'TRANSIT');
@@ -242,7 +299,7 @@ export default function ResultScreen() {
     );
   };
 
-  // 타임라인 바 렌더링 (앱과 동일)
+  // 타임라인 바 렌더링
   const renderTimelineBar = () => {
     if (!route || !route.steps) return null;
 
@@ -347,11 +404,11 @@ export default function ResultScreen() {
     );
   };
 
-  // 지도 렌더링 함수 (앱과 유사한 스타일)
+  // Google Maps 렌더링 함수
   const renderMap = () => {
-    if (!mapLoaded || !MapContainer || !TileLayer || !Marker || !Polyline || !Popup) {
+    if (!mapLoaded) {
       return (
-        <View style={[styles.mapSection, { height: 580, justifyContent: 'center', alignItems: 'center', backgroundColor: '#DEEBFF' }]}>
+        <View style={[styles.mapSection, { height: 300, justifyContent: 'center', alignItems: 'center', backgroundColor: '#DEEBFF' }]}>
           <ActivityIndicator size="large" color="#3457D5" />
           <TextMedium style={{ marginTop: 10, color: '#3457D5' }}>
             지도를 로딩 중...
@@ -362,65 +419,17 @@ export default function ResultScreen() {
 
     return (
       <View style={styles.mapSection}>
-        <MapContainer
-          center={[
-            origin?.coordinates.latitude || 37.5665,
-            origin?.coordinates.longitude || 126.9780
-          ]}
-          zoom={13}
-          style={{ height: '580px', width: '100%' }}
+        <div
           ref={mapRef}
-          whenCreated={mapViewLoaded}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          />
-          
-          {/* 출발지 마커 (파란색) */}
-          {origin && (
-            <Marker
-              position={[origin.coordinates.latitude, origin.coordinates.longitude]}
-            >
-              <Popup>
-                <div>
-                  <strong>출발지</strong><br />
-                  {origin.name}
-                </div>
-              </Popup>
-            </Marker>
-          )}
+          style={{
+            height: '300px',
+            width: '100%',
+            borderRadius: '12px',
+            overflow: 'hidden'
+          }}
+        />
 
-          {/* 도착지 마커 (빨간색) */}
-          {destination && (
-            <Marker
-              position={[destination.coordinates.latitude, destination.coordinates.longitude]}
-            >
-              <Popup>
-                <div>
-                  <strong>도착지</strong><br />
-                  {destination.name}
-                </div>
-              </Popup>
-            </Marker>
-          )}
-
-          {/* 경로 폴리라인 */}
-          {route?.steps && route.steps.map((step, index) => (
-            <React.Fragment key={`polyline-${index}`}>
-              {step.polyline && (
-                <Polyline
-                  positions={convertToLeafletPositions(step.polyline)}
-                  color={step.mode === 'WALKING' ? '#2563EB' : getPolylineColor(step.vehicle_type)}
-                  weight={5}
-                  opacity={0.8}
-                />
-              )}
-            </React.Fragment>
-          ))}
-        </MapContainer>
-
-        {/* 내 위치 버튼 (앱과 동일) */}
+        {/* 내 위치 버튼 */}
         <PressableOpacity
           style={styles.myLocationBtn}
           onPress={goToMyLocation}
@@ -433,7 +442,7 @@ export default function ResultScreen() {
     );
   };
 
-  // 로딩 중이면 로딩 인디케이터 표시 (앱과 동일)
+  // 로딩 중이면 로딩 인디케이터 표시
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -450,7 +459,7 @@ export default function ResultScreen() {
     );
   }
 
-  // 에러가 있으면 에러 메시지 표시 (앱과 동일)
+  // 에러가 있으면 에러 메시지 표시
   if (error) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -467,7 +476,7 @@ export default function ResultScreen() {
     );
   }
 
-  // 로딩이 끝났는데 경로 정보가 없으면 에러 표시 (앱과 동일)
+  // 로딩이 끝났는데 경로 정보가 없으면 에러 표시
   if (!route) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -488,7 +497,7 @@ export default function ResultScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.container}>
         <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false} bounces={true}>
-          {/* 상단 메시지 (앱과 동일) */}
+          {/* 상단 메시지 카드 */}
           <View style={styles.header}>
             {getTopMessage() && (
               <>
@@ -507,15 +516,15 @@ export default function ResultScreen() {
             height: 1,
             backgroundColor: "#C6C8C9",
             width: "100%",
-            marginBottom: 0
+            marginBottom: 16
           }} />
 
-          {/* 지도 */}
+          {/* Google Maps 지도 - 상단 카드 아래, 타임라인 바 위에 위치 */}
           {renderMap()}
 
-          {/* 상세 이동 정보 (앱과 동일) */}
+          {/* 상세 이동 정보 */}
           <View style={{ marginHorizontal: 24 }}>
-            {/* 타임라인 바 */}
+            {/* 타임라인 바 - 20분/20분 텍스트 */}
             {renderTimelineBar()}
             {/* 환승 정보 */}
             {renderTransferInfo()}
@@ -539,10 +548,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderBottomColor: '#C6C8C9',
     borderBottomWidth: 1,
+    paddingHorizontal: 24,
   },
   mapSection: {
-    marginBottom: 12,
+    marginHorizontal: 16,
+    marginBottom: 24,
     position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
   myLocationBtn: {
     position: 'absolute',
@@ -600,4 +618,3 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
 });
-
