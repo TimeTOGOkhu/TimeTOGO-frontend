@@ -19,6 +19,7 @@ TextNormal,
 TextLarge,
 } from "@components/TextSize";
 import PressableOpacity from "@/components/PressableOpacity";
+import { Platform } from 'react-native';
 
 type Props = {
   visible: boolean;
@@ -96,6 +97,7 @@ export default function ArrivalTimeModal({
       onBackdropPress={onCancel}
       backdropOpacity={0.3}
       style={styles.modal}
+      {...(Platform.OS === 'web' && { ariaHideApp: false })}
     >
       <View style={styles.container}>
         {/* 헤더: TextSize로 동적 폰트 크기 적용 */}
