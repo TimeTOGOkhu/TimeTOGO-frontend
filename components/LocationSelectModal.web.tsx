@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import Modal from 'react-modal';
 
@@ -165,12 +165,35 @@ const LocationSelectModal: React.FC<LocationSelectModalProps> = ({
         throw new Error('Leaflet 리소스 로딩 실패');
       }
       
-      // 2. 지도 초기화 (더 짧은 지연)
-      setTimeout(() => {
-        if (visible) { // 모달이 여전히 열려있을 때만 초기화
-          initializeMap();
-        }
-      }, 200); // 500ms에서 200ms로 단축
+      // 2. 지도 초기화 (DOM 생성 대기 강화)
+      const waitForContainer = () => {
+        const maxAttempts = 20; // 최대 2초 대기 (100ms * 20)
+        let attempts = 0;
+
+        const checkContainer = () => {
+          attempts++;
+          console.log(`컨테이너 체크 시도 ${attempts}/${maxAttempts}`);
+
+          if (mapContainerRef.current && visible) {
+            console.log('컨테이너 찾음! 지도 초기화 시작');
+            initializeMap();
+          } else if (attempts < maxAttempts) {
+            console.log('컨테이너 대기 중...', {
+              ref: !!mapContainerRef.current,
+              visible
+            });
+            setTimeout(checkContainer, 100);
+          } else {
+            console.error('컨테이너 대기 시간 초과');
+            setError('지도 컨테이너를 찾을 수 없습니다.');
+            setIsLoading(false);
+          }
+        };
+
+        setTimeout(checkContainer, 100); // 첫 체크는 100ms 후
+      };
+
+      waitForContainer();
       
     } catch (error) {
       console.error('맵 리소스 로딩 실패:', error);
@@ -290,16 +313,46 @@ const LocationSelectModal: React.FC<LocationSelectModalProps> = ({
     });
   };
 
-  // 지도 초기화 최적화
+  // 지도 초기화 최적화 (강력한 컨테이너 체크)
   const initializeMap = () => {
-    if (!mapContainerRef.current || !window.L || !visible) {
-      console.error('지도 초기화 조건 불충족:', {
-        container: !!mapContainerRef.current,
+    console.log('initializeMap 호출됨');
+
+    // 1차 체크: 기본 조건
+    if (!window.L || !visible) {
+      console.error('지도 초기화 조건 불충족 (1차):', {
         L: !!window.L,
         visible
       });
       return;
     }
+
+    // 2차 체크: DOM 컨테이너 강력 검증
+    const containerElement = mapContainerRef.current;
+    if (!containerElement) {
+      console.error('지도 초기화 조건 불충족 (2차): 컨테이너가 null');
+      return;
+    }
+
+    // 3차 체크: DOM이 실제로 연결되어 있는지 확인
+    if (!containerElement.isConnected || !document.contains(containerElement)) {
+      console.error('지도 초기화 조건 불충족 (3차): 컨테이너가 DOM에 연결되지 않음');
+      return;
+    }
+
+    // 4차 체크: 컨테이너 크기 확인
+    const rect = containerElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      console.error('지도 초기화 조건 불충족 (4차): 컨테이너 크기가 0');
+      console.log('컨테이너 크기:', rect);
+      return;
+    }
+
+    console.log('✅ 모든 조건 통과! 지도 초기화 시작');
+    console.log('컨테이너 정보:', {
+      element: containerElement,
+      connected: containerElement.isConnected,
+      size: rect
+    });
 
     try {
       console.log('지도 초기화 시작...');
@@ -317,14 +370,14 @@ const LocationSelectModal: React.FC<LocationSelectModalProps> = ({
 
       // 컨테이너 완전 정리
       const container = mapContainerRef.current;
-      container.innerHTML = '';
+      container!.innerHTML = '';
       
       // DOM에서 완전히 제거 후 재생성
-      container.style.height = '280px';
-      container.style.width = '100%';
-      container.style.background = '#e0e0e0';
-      container.style.borderRadius = '12px';
-      container.style.position = 'relative';
+      container!.style.height = '280px';
+      container!.style.width = '100%';
+      container!.style.background = '#e0e0e0';
+      container!.style.borderRadius = '12px';
+      container!.style.position = 'relative';
       
       // Leaflet ID 제거
       if ((container as any)._leaflet_id) {
@@ -447,7 +500,8 @@ const LocationSelectModal: React.FC<LocationSelectModalProps> = ({
 
       console.log('Google Places API 로딩...');
       const script = document.createElement('script');
-      const apiKey = process.env.REACT_APP_GOOGLE_PLACES_API_KEY || process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
+      // 임시 하드코딩 API 키 (개발용)
+      const apiKey = 'AIzaSyC8-dlIY7iVss5i5ZWUmh0n4JinrRcTrvw'; // 기존 콘솔에서 확인된 키 사용
       
       if (!apiKey) {
         console.warn('Google Places API 키가 설정되지 않음');
@@ -850,7 +904,8 @@ const styles = StyleSheet.create({
     fontFamily: AppTypography.fontFamily.regular,
     backgroundColor: AppColors.white,
     color: AppColors.text,
-    outline: 'none',
+    outlineWidth: 0,
+    outlineStyle: 'none',
   } as any,
   searchStatus: {
     marginTop: 8,
