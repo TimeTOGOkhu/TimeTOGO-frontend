@@ -52,10 +52,19 @@ interface CalculateRouteParams {
   arrival_time: string; // 유닉스 타임스탬프 문자열
 }
 
-// Lambda 함수 API 엔드포인트
-const API_BASE_URL = 'http://172.21.16.196:5001/lambda';
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    // 웹 환경 - localhost 사용
+    return 'http://localhost:5001/lambda';
+  } else {
+    // 네이티브 환경 - 실제 PC IP 사용
+    return 'http://172.21.16.196:5001/lambda';
+  }
+};
 
-const fetchWithTimeout = async (url: string, options = {}, timeout = 5000) => {
+const API_BASE_URL = getApiBaseUrl();
+
+const fetchWithTimeout = async (url: string, options = {}, timeout = 15000) => {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   
