@@ -2,12 +2,12 @@
 import React, { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import {
-  SafeAreaView,
   View,
   FlatList,
   StyleSheet,
   Text,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   TextSmall,
   TextMedium,
@@ -176,7 +176,7 @@ export default function HistoryScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>{t('history')}</Text>
       </View>
@@ -185,7 +185,7 @@ export default function HistoryScreen() {
         renderItem={renderHistoryItem}
         keyExtractor={(item) => `${item.origin.coordinates.latitude}-${item.origin.coordinates.longitude}-${item.destination.coordinates.latitude}-${item.destination.coordinates.longitude}`}
         contentContainerStyle={styles.list}
-        ListEmptyComponent={ // 히스토리가 없을 때 표시할 컴포넌트
+        ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <TextMedium style={styles.emptyText}>{t('noHistory')}</TextMedium>
           </View>
@@ -198,11 +198,11 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#fff' },
   header: {
-    height: 72,
+    height: 100,
     justifyContent: 'center',
+    alignItems: 'center',
     borderBottomColor: '#C6C8C9',
     borderBottomWidth: 1,
-    paddingHorizontal: 16,
   },
   title: {
     fontSize: 30,

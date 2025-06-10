@@ -501,6 +501,25 @@ export default function ResultScreen() {
         <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false} bounces={true}>
           {/* 상단 메시지 카드 */}
           <View style={styles.header}>
+            {/* 좌측 상단 뒤로가기 버튼 */}
+            <PressableOpacity
+              style={styles.backIconOnly}
+              onPress={handleBackPress}
+              hitSlop={10}
+            >
+              {/* 웹 환경에서는 DynamicIcon이 제대로 렌더링되지 않을 수 있으므로 대체 텍스트/이모지 사용 */}
+              <span style={{ fontSize: 22, color: "#888" }}>←</span>
+            </PressableOpacity>
+            {/* 우측 상단 공유 버튼 */}
+            <PressableOpacity
+              style={styles.shareIconOnly}
+              onPress={() => {
+                window.alert("공유 기능\n연결 예정입니다.");
+              }}
+              hitSlop={10}
+            >
+              <span style={{ fontSize: 20, color: "#888" }}>🔗</span>
+            </PressableOpacity>
             {getTopMessage() && (
               <>
                 <TextXXXLarge style={{ color: "#3457D5", fontFamily: "Pretendard_ExtraBold", marginBottom: 4, textAlign: "center" }}>
@@ -551,6 +570,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#C6C8C9',
     borderBottomWidth: 1,
     paddingHorizontal: 24,
+    position: 'relative',
   },
   mapSection: {
     marginHorizontal: 16,
@@ -618,5 +638,27 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: "#fff",
+  },
+  backIconOnly: {
+    position: 'absolute',
+    left: 8,
+    top: 8,
+    zIndex: 10,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    padding: 0,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  shareIconOnly: {
+    position: 'absolute',
+    right: 8,
+    top: 8,
+    zIndex: 10,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    padding: 0,
+    elevation: 0,
+    shadowOpacity: 0,
   },
 });

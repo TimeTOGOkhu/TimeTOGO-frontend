@@ -1,11 +1,6 @@
 // app/(tabs)/explore.web.tsx
 import React, { useEffect, useState } from 'react';
-import {
-  Alert,
-  StyleSheet,
-  Text,
-  View
-} from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
