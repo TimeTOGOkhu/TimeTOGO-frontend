@@ -6,7 +6,8 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  Dimensions
+  Dimensions,
+  Share,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -25,6 +26,7 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import { decodePolygon, extractTMapCoordinates } from "@/services/routeService";
 import * as Location from 'expo-location';
 import haversine from 'haversine';
+import { encodeRouteToUrl } from '@/utils/urlUtils';
 
 // 네이버맵 스타일러 추천 스타일(밝고 심플, 주요 도로/철도/공원/수역 강조, 불필요한 요소 최소화)
 const mapStyle = [
@@ -510,6 +512,37 @@ export default function ResultScreen() {
     };
   };
 
+  const shareRouteLink = async () => {
+    if (!origin || !destination || !route) return;
+
+    try {
+      const arrivalTime = route.arrivalTime ? new Date(route.arrivalTime) : new Date();
+      const shareUrl = encodeRouteToUrl(origin, destination, arrivalTime);
+      
+      await Share.share({
+        message: `TimeTOGO 경로 공유\n${origin.name}에서 ${destination.name}으로 가는 경로\n\n${shareUrl}`,
+        url: shareUrl,
+        title: 'TimeTOGO 경로 공유',
+      });
+    } catch (error) {
+      console.error('링크 공유 오류:', error);
+      Alert.alert('오류', '링크 공유에 실패했습니다.');
+    }
+  };
+
+  const renderShareButton = () => {
+    if (!origin || !destination || !route) return null;
+
+    return (
+      <View style={styles.shareSection}>
+        <PressableOpacity onPress={shareRouteLink} style={styles.shareButton}>
+          <DynamicIcon name="share" size={20} color="#fff" style={{ marginRight: 8 }} />
+          <TextMedium style={styles.shareButtonText}>경로 링크 공유</TextMedium>
+        </PressableOpacity>
+      </View>
+    );
+  };
+
   // 네이버지도 스타일 환승정보: 노선색, 노선명, 출발정류장, 도착정류장, 출발/도착시간, 소요시간, 정차수 등
   const renderTransferInfo = () => {
     if (!route?.steps) return null;
@@ -963,6 +996,7 @@ export default function ResultScreen() {
             {/* 환승 정보(네이버 길찾기 스타일) */}
             {renderTransferInfo()}
           </View>
+          {renderShareButton()}
 
           {/* 도착 시간 안내 */}
           {/* 
@@ -1007,6 +1041,8 @@ export default function ResultScreen() {
     </SafeAreaView>
   );
 }
+
+
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#fff" },
@@ -1342,5 +1378,28 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(232, 240, 254, 0.95)',
     borderWidth: 2,
     borderColor: '#3457D5',
+  },
+  shareSection: {
+    marginHorizontal: 24,
+    marginVertical: 16,
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3457D5',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    shadowColor: '#3457D5',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  shareButtonText: {
+    color: '#fff',
+    fontFamily: 'Pretendard_Bold',
+    fontSize: 16,
   },
 });
