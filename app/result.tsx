@@ -6,6 +6,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Dimensions
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -128,6 +129,8 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 const SMOOTHING_FACTOR = 0.2;  // EMA 계수
 const MAX_DELTA = 5;         // 한 프레임당 최대 회전량(°)
 
+const { width, height } = Dimensions.get('window');
+
 export default function ResultScreen() {
   const mapRef = React.useRef<MapView>(null);
   const lastSmoothed = React.useRef(0);
@@ -139,6 +142,9 @@ export default function ResultScreen() {
   const isNavigationStartedRef = React.useRef(false);
   const [currentWalkingInstruction, setCurrentWalkingInstruction] = useState<string | null>(null);
   const [walkingRoutes, setWalkingRoutes] = useState<Record<number, any>>({});
+  const [navigationMode, setNavigationMode] = useState<'walking' | 'transit' | 'done'>('walking');
+  const [showTransferPopup, setShowTransferPopup] = useState(false);
+  const [transferStepIndex, setTransferStepIndex] = useState<number | null>(null);
   
   const mapViewLoaded = async() => {
     await delay(1000);
@@ -246,11 +252,31 @@ export default function ResultScreen() {
             if (distanceFromOrigin >= 10) {
               setIsNavigationStarted(true);
               isNavigationStartedRef.current = true;
-              console.log('네비게이션 시작: 출발지에서 10m 이상 이동');
+            }
+          }
+          // 환승 근처 도달 감지 (TRANSIT step 출발 정류장)
+          if (route?.steps) {
+            for (let i = 0; i < route.steps.length; i++) {
+              const step = route.steps[i];
+              if (step.mode === 'TRANSIT' && step.start_location && step.start_location.lat && step.start_location.lng) {
+                const dist = calculateDistance(
+                  newLocation.latitude,
+                  newLocation.longitude,
+                  step.start_location.lat,
+                  step.start_location.lng
+                );
+                if (dist < 50 && navigationMode === 'walking') {
+                  setShowTransferPopup(true);
+                  setTransferStepIndex(i);
+                  // setNavigationMode('transit'); // 자동 전환 제거
+                  // setTimeout(() => setShowTransferPopup(false), 5000); // 자동 닫기 제거
+                  break;
+                }
+              }
             }
           }
           // 네비게이션이 시작되었고 도보 경로가 있을 때 안내 문구 업데이트
-          if (isNavigationStartedRef.current) {
+          if (isNavigationStartedRef.current && navigationMode === 'walking') {
             updateWalkingInstruction(newLocation);
           }
           // 위치 추적 상태일 때만 카메라 이동
@@ -260,7 +286,6 @@ export default function ResultScreen() {
                 latitude: location.coords.latitude,
                 longitude: location.coords.longitude,
               },
-              // pitch: 90,
             }, { duration: 300 });
           }
         }
@@ -464,8 +489,15 @@ export default function ResultScreen() {
   // 상단 안내 메시지 생성
   const getTopMessage = () => {
     if (!route) return null;
-    
     const time = formatTime(route.departureTime);
+    if (navigationMode === 'transit' && transferStepIndex !== null && route.steps) {
+      // 환승 탑승 상태일 때
+      const currentStep = route.steps[transferStepIndex];
+      return {
+        time: '대중교통 탑승 중입니다',
+        message: `대중교통을 이용해 ${currentStep?.duration_text} 소요됩니다.`,
+      };
+    }
     if (weather?.condition === "rainy" || weather?.condition === "cloudy") {
       return { 
         message: "우산을 챙겨서 출발하세요!",
@@ -530,66 +562,7 @@ export default function ResultScreen() {
     );
   };
 
-  // 상세 이동정보
-  const renderDetailedTimeline = () => {
-    if (!route || !route.steps) return null;
-    return (
-      <View style={{ marginVertical: 16 }}>
-        {route.steps.map((step, idx) => (
-          <View
-            key={idx}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginBottom: 12,
-              padding: 12,
-              borderRadius: 10,
-              backgroundColor: '#F8F9FA',
-              borderWidth: 1,
-              borderColor: '#E5E7EB',
-            }}
-          >
-            {/* 단계별 색상 바 */}
-            <View
-              style={{
-                width: 6,
-                height: 48,
-                borderRadius: 3,
-                backgroundColor: getPolylineColor(step.vehicle_type),
-                marginRight: 12,
-              }}
-            />
-            {/* 상세 정보 텍스트 */}
-            <View style={{ flex: 1 }}>
-              <TextMedium style={{ fontFamily: "Pretendard_Bold", fontSize: 16, color: "#222" }}>
-                {step.mode === "WALKING"
-                  ? step.instruction || "도보 이동"
-                  : step.line_name}
-              </TextMedium>
-              <TextSmall style={{ color: "#666", marginTop: 2 }}>
-                {step.departure_stop && step.arrival_stop
-                  ? `${step.departure_stop} → ${step.arrival_stop}`
-                  : ""}
-              </TextSmall>
-              <TextSmall style={{ color: "#888", marginTop: 2 }}>
-                {step.mode === "WALKING"
-                  ? step.duration_text
-                  : [
-                      step.departure_time ? `${step.departure_time} 출발` : "",
-                      step.arrival_time ? `${step.arrival_time} 도착` : "",
-                      step.num_stops ? `${step.num_stops}개 정차` : "",
-                      step.duration_text,
-                    ]
-                      .filter(Boolean)
-                      .join(" • ")
-                }
-              </TextSmall>
-            </View>
-          </View>
-        ))}
-      </View>
-    );
-  };
+  // 상세 이동정보는 현재 사용하지 않으므로 제거
 
   // 네이버 스타일 한줄 타임라인 (구간별 소요시간에 따라 길이 조정, 위에 총 소요시간)
   const renderTimelineBar = () => {
@@ -680,7 +653,6 @@ export default function ResultScreen() {
                 </View>
                 <TextSmall style={{
                   color: "#64748B",
-                  fontSize: 12,
                   marginTop: 2,
                   fontFamily: "Pretendard_SemiBold"
                 }}>
@@ -844,7 +816,7 @@ export default function ResultScreen() {
         <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false} bounces={true}>
           {/* 상단 메시지 */}
           <View style={styles.header}>
-            {isNavigationStarted && currentWalkingInstruction ? (
+            {isNavigationStarted && currentWalkingInstruction && navigationMode === 'walking' ? (
               // 도보 안내 문구일 때
               <TextXXXLarge style={{ 
                 color: "#3457D5", 
@@ -874,7 +846,8 @@ export default function ResultScreen() {
           }} />
           {/* 지도 */}
           <View style={[styles.mapSection, { marginTop: 0 }]}>
-            <MapView
+            <View style={{ flex:1 }}>
+              <MapView
               ref={mapRef}
               showsUserLocation={true}
               showsMyLocationButton={false}
@@ -947,6 +920,40 @@ export default function ResultScreen() {
                   color={isFollowingUser ? "#3457D5" : "#333"}
                 />
             </PressableOpacity>
+            </View>
+
+            {showTransferPopup && transferStepIndex !== null && (
+            <View style={{
+              backgroundColor: '#FF3B30',
+              padding: 18,
+              alignItems: 'center',
+            }}>
+              <TextXLarge style={{ color: '#fff', fontFamily: 'Pretendard_Bold' }}>
+                {route?.steps?.[transferStepIndex]?.vehicle_type === 'BUS' ? '버스 환승 지점에 도착했습니다!' : '지하철 환승 지점에 도착했습니다!'}
+              </TextXLarge>
+              <TextMedium style={{ color: '#fff', marginTop: 4 }}>
+                {route?.steps?.[transferStepIndex]?.departure_stop}에서 탑승하세요
+              </TextMedium>
+              <Pressable
+                style={{
+                  marginTop: 16,
+                  backgroundColor: '#fff',
+                  borderRadius: 8,
+                  paddingVertical: 10,
+                  paddingHorizontal: 32,
+                }}
+                onPress={() => {
+                  setNavigationMode('transit');
+                  setShowTransferPopup(false);
+                }}
+              >
+                <TextMedium style={{ color: '#FF3B30', fontFamily: 'Pretendard_Bold' }}>
+                  탑승 완료
+                </TextMedium>
+              </Pressable>
+            </View>
+          )}
+
           </View>
 
           {/* 상세 이동 정보 */}
@@ -993,6 +1000,7 @@ export default function ResultScreen() {
             </View>
           </View>
           */}
+          {/* 하단 환승 팝업 UI 렌더링 (return 내부, ScrollView와 같은 레벨) */}
           <SafeAreaView style={styles.safe} edges={["bottom"]}></SafeAreaView>
         </ScrollView>
       </View>
@@ -1105,6 +1113,7 @@ const styles = StyleSheet.create({
     fontFamily: "Pretendard_SemiBold",
   },
   mapSection: {
+    height: height - 240,
     marginBottom: 12,
   },
   sectionTitle: {
@@ -1120,8 +1129,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   mapPlaceholder: {
-    width: "100%",
-    height: 580,
+    flex: 1,
     backgroundColor: "#DEEBFF",
   },
   routeInfo: {

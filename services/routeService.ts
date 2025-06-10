@@ -82,7 +82,7 @@ export const calculateRoute = async (params: CalculateRouteParams, origin: Store
     console.log('API 호출 파라미터:', params);
     
     // Lambda 함수 호출
-    const response = await fetchWithTimeout(`${API_BASE_URL}/route/mock`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/route`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -298,7 +298,7 @@ export const decodePolygon = (
  */
 export const fetchWalkingRoute = async (origin: { latitude: number; longitude: number }, destination: { latitude: number; longitude: number }) => {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/route/walk/mock`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/route/walk`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
