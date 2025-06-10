@@ -152,6 +152,8 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="result" options={{ headerShown: false }} />
         <Stack.Screen name="share" options={{ headerShown: false }} />
+        <Stack.Screen name="path/[pathId]" options={{ headerShown: false }} /> 
+        <Stack.Screen name="monitor/[pathId]" options={{ headerShown: false }} /> 
         <Stack.Screen name="+not-found" />
       </Stack>
     </ThemeProvider>

@@ -27,6 +27,11 @@ import { decodePolygon, extractTMapCoordinates } from "@/services/routeService";
 import * as Location from 'expo-location';
 import haversine from 'haversine';
 import { encodeRouteToUrl } from '@/utils/urlUtils';
+import { createShareableRoute } from '@/utils/urlUtils'; 
+import { useGroupStore } from '@/store/groupStore'; 
+import LocationTracker from '@/components/LocationTracker';
+import GroupMembersMap from '@/components/GroupMembersMap';
+import { LocationData } from '@/services/pathService';
 
 // 네이버맵 스타일러 추천 스타일(밝고 심플, 주요 도로/철도/공원/수역 강조, 불필요한 요소 최소화)
 const mapStyle = [
@@ -147,6 +152,13 @@ export default function ResultScreen() {
   const [navigationMode, setNavigationMode] = useState<'walking' | 'transit' | 'done'>('walking');
   const [showTransferPopup, setShowTransferPopup] = useState(false);
   const [transferStepIndex, setTransferStepIndex] = useState<number | null>(null);
+  const { pathId, isCreator, memberLocations } = useGroupStore(); 
+  // 멤버 위치 업데이트 콜백
+  const handleMemberLocationsUpdate = (locations: LocationData[]) => {
+    // 지도에 멤버 마커 업데이트를 위한 처리
+    console.log('멤버 위치 업데이트:', locations);
+  };
+
   
   const mapViewLoaded = async() => {
     await delay(1000);
@@ -517,10 +529,16 @@ export default function ResultScreen() {
 
     try {
       const arrivalTime = route.arrivalTime ? new Date(route.arrivalTime) : new Date();
-      const shareUrl = encodeRouteToUrl(origin, destination, arrivalTime);
+      
+      // 백엔드 API를 사용하여 공유 링크 생성
+      const { shareUrl, monitorUrl, pathId } = await createShareableRoute(origin, destination, arrivalTime);
+      
+      // 그룹 정보 설정 (생성자로)
+      const { setPathId } = useGroupStore.getState();
+      setPathId(pathId, true);
       
       await Share.share({
-        message: `TimeTOGO 경로 공유\n${origin.name}에서 ${destination.name}으로 가는 경로\n\n${shareUrl}`,
+        message: `TimeTOGO 경로 공유\n${origin.name}에서 ${destination.name}으로 가는 경로\n\n경로 보기: ${shareUrl}\n실시간 추적: ${monitorUrl}`,
         url: shareUrl,
         title: 'TimeTOGO 경로 공유',
       });
@@ -917,6 +935,24 @@ export default function ResultScreen() {
                   pinColor="#EA4335"
                 />
               )}
+              {/* 그룹 멤버 마커 추가 */}
+                {memberLocations.map((location, index) => {
+                  const isRecent = Date.now() - location.timestamp < 300000; // 5분 이내
+                  if (!isRecent) return null;
+                  
+                  return (
+                    <Marker
+                      key={`member-${location.user_id}-${index}`}
+                      coordinate={{
+                        latitude: parseFloat(location.lat.toString()),
+                        longitude: parseFloat(location.lon.toString()),
+                      }}
+                      title={`멤버 ${location.user_id.slice(-8)}`}
+                      description={`마지막 업데이트: ${new Date(location.timestamp).toLocaleTimeString()}`}
+                      pinColor="#10B981"
+                    />
+                  );
+                })}
               {route?.steps && route.steps.map((step, index) => (
                 <React.Fragment key={`polyline-${index}`}>
                   {step.start_location && step.end_location && (
@@ -986,8 +1022,13 @@ export default function ResultScreen() {
               </Pressable>
             </View>
           )}
-
           </View>
+
+          {/* 위치 추적 컴포넌트 추가 */}
+          {pathId && <LocationTracker autoStart={true} />}
+
+          {/* 그룹 멤버 위치 표시 (생성자만) */}
+          {pathId && <GroupMembersMap onMemberLocationsUpdate={handleMemberLocationsUpdate} />}
 
           {/* 상세 이동 정보 */}
           <View style={{ marginHorizontal: 24 }}>

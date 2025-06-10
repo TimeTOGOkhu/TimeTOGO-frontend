@@ -1,4 +1,6 @@
-// utils/urlUtils.ts
+// utils/urlUtils.ts 수정
+import { createPath } from '@/services/pathService';
+
 export interface RouteParams {
   origin: string;
   destination: string;
@@ -7,9 +9,60 @@ export interface RouteParams {
   originLng?: number;
   destLat?: number;
   destLng?: number;
+  pathId?: string; // 추가
 }
 
-// 경로 정보를 URL 파라미터로 인코딩
+// 경로 정보를 공유 가능한 URL로 변환 (백엔드 API 사용)
+export const createShareableRoute = async (
+  origin: { name: string; coordinates: { latitude: number; longitude: number } },
+  destination: { name: string; coordinates: { latitude: number; longitude: number } },
+  arrivalTime: Date
+): Promise<{ shareUrl: string; monitorUrl: string; pathId: string }> => {
+  try {
+    const pathData = {
+      origin: origin.name,
+      destination: destination.name,
+      arrivalTime: arrivalTime.toISOString(),
+      originLat: origin.coordinates.latitude,
+      originLng: origin.coordinates.longitude,
+      destLat: destination.coordinates.latitude,
+      destLng: destination.coordinates.longitude,
+    };
+    
+    const response = await createPath(pathData);
+    
+    return {
+      shareUrl: response.share_url,
+      monitorUrl: response.monitor_url,
+      pathId: response.path_id,
+    };
+  } catch (error) {
+    console.error('공유 링크 생성 오류:', error);
+    throw error;
+  }
+};
+
+// path/{path_id} URL에서 path_id 추출
+export const extractPathId = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  
+  const path = window.location.pathname;
+  const pathMatch = path.match(/\/path\/([^\/]+)/);
+  
+  return pathMatch ? pathMatch[1] : null;
+};
+
+// monitor/{path_id} URL에서 path_id 추출
+export const extractMonitorPathId = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  
+  const path = window.location.pathname;
+  const pathMatch = path.match(/\/monitor\/([^\/]+)/);
+  
+  return pathMatch ? pathMatch[1] : null;
+};
+
+// 기존 함수들도 유지 (레거시 지원용)
 export const encodeRouteToUrl = (
   origin: { name: string; coordinates: { latitude: number; longitude: number } },
   destination: { name: string; coordinates: { latitude: number; longitude: number } },
@@ -25,10 +78,9 @@ export const encodeRouteToUrl = (
     destLng: destination.coordinates.longitude.toString(),
   });
 
-  return `${window.location.origin}/share?${params.toString()}`; // /share 경로 사용
+  return `${window.location.origin}/share?${params.toString()}`;
 };
 
-// URL 파라미터에서 경로 정보 디코딩
 export const decodeRouteFromUrl = (): RouteParams | null => {
   if (typeof window === 'undefined') return null;
   
@@ -53,7 +105,6 @@ export const decodeRouteFromUrl = (): RouteParams | null => {
   };
 };
 
-// URL을 깔끔하게 정리 (파라미터 제거)
 export const cleanUrl = () => {
   if (typeof window !== 'undefined') {
     window.history.replaceState({}, '', window.location.pathname);
