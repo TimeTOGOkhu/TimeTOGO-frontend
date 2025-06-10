@@ -53,9 +53,9 @@ interface CalculateRouteParams {
 }
 
 // Lambda 함수 API 엔드포인트
-const API_BASE_URL = 'http://192.168.0.15:5001/lambda';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.40:5001';
 
-const fetchWithTimeout = async (url: string, options = {}, timeout = 5000) => {
+const fetchWithTimeout = async (url: string, options = {}, timeout = 10000) => {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   
@@ -82,7 +82,7 @@ export const calculateRoute = async (params: CalculateRouteParams, origin: Store
     console.log('API 호출 파라미터:', params);
     
     // Lambda 함수 호출
-    const response = await fetchWithTimeout(API_BASE_URL, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/route`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -282,4 +282,63 @@ export const decodePolygon = (
   }
 
   return coordinates;
+};
+
+/**
+ * TMap API를 사용하여 도보 경로 데이터를 가져옵니다.
+ * Google Maps API의 `WALKING` 모드 경로를 대체하는 데 사용됩니다.
+ * 
+ * 한국에서 Google Maps API의 도보 경로는 상세하지 않아서, 
+ * TMap API를 사용하여 더 정확한 도보 경로를 제공합니다.
+ * 
+ * 사용 방법:
+ * 1. Google Maps API로 전체 경로를 계산합니다.
+ * 2. 도보(WALKING) 구간을 찾아서 이 함수를 호출합니다.
+ * 3. 반환된 TMap 경로 데이터로 지도에 새로운 폴리라인을 그립니다.
+ */
+export const fetchWalkingRoute = async (origin: { latitude: number; longitude: number }, destination: { latitude: number; longitude: number }) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/route/walk`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        origin, destination
+      })
+    }, 5000);
+
+    if (!response.ok) {
+      console.error('TMap 도보 경로 API 오류:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('TMap 도보 경로 요청 실패:', error);
+    return null;
+  }
+};
+
+/**
+ * TMap API 응답에서 좌표 배열을 추출합니다.
+ * @param tmapRouteData TMap API 응답 데이터
+ * @returns LatLng[] 형식의 좌표 배열
+ * 
+ * TMap API는 GeoJSON 형태로 데이터를 반환하며, 이 중 LineString 타입의 features에서
+ * 좌표를 추출하여 react-native-maps의 Polyline 컴포넌트에서 사용할 수 있는 형태로 변환합니다.
+ */
+export const extractTMapCoordinates = (tmapRouteData: any): LatLng[] => {
+  if (!tmapRouteData || !tmapRouteData.features) {
+    return [];
+  }
+
+  return tmapRouteData.features
+    .filter((feature: any) => feature.geometry.type === 'LineString')
+    .flatMap((feature: any) => 
+      (feature.geometry.coordinates as [number, number][]).map(
+        ([lng, lat]) => ({ latitude: lat, longitude: lng })
+      )
+    );
 };
