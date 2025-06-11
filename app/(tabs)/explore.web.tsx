@@ -91,6 +91,31 @@ export default function ExploreScreen() {
     return () => clearInterval(timer);
   }, []);
 
+  // useEffect(() => {
+  //   // 스토어에서 origin, destination이 설정되고 현재 상태에 반영되지 않았을 때 자동 실행
+  //   if (storeOrigin && storeDestination && 
+  //       (!startLocation || startLocation.name !== storeOrigin.name || 
+  //        !endLocation || endLocation.name !== storeDestination.name)) {
+    
+  //     console.log('스토어에서 경로 정보 감지:', storeOrigin.name, '->', storeDestination.name);
+    
+  //     // 상태 업데이트
+  //     setStartLocation(storeOrigin);
+  //     setEndLocation(storeDestination);
+    
+  //     // 현재 시간보다 1시간 후를 기본 도착시간으로 설정
+  //     const defaultArrival = new Date();
+  //     defaultArrival.setHours(defaultArrival.getHours() + 1);
+  //     setArrival(defaultArrival);
+    
+  //     // 잠시 후 자동 계산 실행
+  //     setTimeout(() => {
+  //       console.log('자동 경로 계산 시작');
+  //       handleCalculate();
+  //     }, 2000);
+  //   }
+  // }, [storeOrigin, storeDestination, startLocation, endLocation]);
+
   const handleLogoClick = () => {
     if (!startLocation) setStartModalVisible(true);
     else if (!endLocation) setEndModalVisible(true);
