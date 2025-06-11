@@ -542,7 +542,7 @@ export default function ResultScreen() {
       setPathId(pathId, true);
       
       await Share.share({
-        message: `TimeTOGO 경로 \n${origin.name}에서 ${destination.name}으로 가는 경로\n\n공유 경로: ${shareUrl}\n실시간 추적: ${monitorUrl}`,
+        message: `TimeTOGO 경로 \n${origin.name}에서 ${destination.name}으로 가는 경로\n\n공유 경로: ${shareUrl}}`,
         url: shareUrl,
         title: 'TimeTOGO 경로 공유',
       });

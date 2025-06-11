@@ -33,8 +33,8 @@ export const createShareableRoute = async (calculationState: any): Promise<{ sha
     const response = await createPath(pathData);
     
     return {
-      shareUrl: response.share_url,
-      monitorUrl: response.monitor_url,
+      shareUrl: response.share_url.replace('timetogo.app', 'timetogo.expo.app'),
+      monitorUrl: response.monitor_url.replace('timetogo.app', 'timetogo.expo.app'),
       pathId: response.path_id,
     };
   } catch (error) {
