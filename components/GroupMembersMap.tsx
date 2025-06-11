@@ -51,7 +51,7 @@ export default function GroupMembersMap({ onMemberLocationsUpdate }: GroupMember
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.titleSection}>
-          <DynamicIcon name="user" size={16} color="#3457D5" /> {/* 수정: users -> user */}
+          <DynamicIcon name="user" size={16} color="#3457D5" />
           <TextMedium style={styles.title}>
             그룹 멤버 추적 ({activeMemberCount}명 활성)
           </TextMedium>
