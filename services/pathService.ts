@@ -2,13 +2,8 @@
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.40:5001';
 
 export interface CreatePathRequest {
-  origin: string;
-  destination: string;
-  arrivalTime: string;
-  originLat: number;
-  originLng: number;
-  destLat: number;
-  destLng: number;
+  creator_id: string;
+  path: string;
 }
 
 export interface CreatePathResponse {
@@ -18,6 +13,7 @@ export interface CreatePathResponse {
 }
 
 export interface LocationUpdate {
+  user_id: string;
   lat: number;
   lon: number;
   timestamp: number;
@@ -31,17 +27,11 @@ export interface LocationData {
   lon: number;
 }
 
-export interface PathInfo {
+export interface PathData {
   path_id: string;
   creator_id: string;
-  created_at: number;
-  origin: string;
-  destination: string;
-  arrivalTime: string;
-  originLat: number;
-  originLng: number;
-  destLat: number;
-  destLng: number;
+  path: string;
+  created_at: string;
 }
 
 // 경로 생성 (공유 링크 생성)
@@ -62,27 +52,6 @@ export const createPath = async (data: CreatePathRequest): Promise<CreatePathRes
     return await response.json();
   } catch (error) {
     console.error('경로 생성 오류:', error);
-    throw error;
-  }
-};
-
-// 경로 정보 조회
-export const getPathInfo = async (pathId: string): Promise<PathInfo> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/paths/${pathId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    
-    if (!response.ok) {
-      throw new Error('경로 정보 조회 실패');
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('경로 정보 조회 오류:', error);
     throw error;
   }
 };
@@ -125,6 +94,27 @@ export const getPathLocations = async (pathId: string): Promise<LocationData[]> 
     return data.locations || [];
   } catch (error) {
     console.error('위치 조회 오류:', error);
+    throw error;
+  }
+};
+
+// 경로 정보 조회 (path_id로 경로 데이터 가져오기)
+export const getPathData = async (pathId: string): Promise<PathData> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/paths/${pathId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error('경로 데이터 조회 실패');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('경로 데이터 조회 오류:', error);
     throw error;
   }
 };

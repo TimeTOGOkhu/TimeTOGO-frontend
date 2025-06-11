@@ -1,32 +1,33 @@
 // utils/urlUtils.ts 수정
 import { createPath } from '@/services/pathService';
+import { getDeviceUUID } from './deviceId';
 
-export interface RouteParams {
-  origin: string;
-  destination: string;
-  arrivalTime: string;
-  originLat?: number;
-  originLng?: number;
-  destLat?: number;
-  destLng?: number;
-  pathId?: string; // 추가
-}
+// CalculationState를 문자열로 변환
+export const serializeCalculationState = (calculationState: any): string => {
+  try {
+    return JSON.stringify(calculationState);
+  } catch (error) {
+    console.error('CalculationState 직렬화 오류:', error);
+    throw error;
+  }
+};
+
+// 문자열을 CalculationState로 변환
+export const deserializeCalculationState = (pathString: string): any => {
+  try {
+    return JSON.parse(pathString);
+  } catch (error) {
+    console.error('CalculationState 역직렬화 오류:', error);
+    throw error;
+  }
+};
 
 // 경로 정보를 공유 가능한 URL로 변환 (백엔드 API 사용)
-export const createShareableRoute = async (
-  origin: { name: string; coordinates: { latitude: number; longitude: number } },
-  destination: { name: string; coordinates: { latitude: number; longitude: number } },
-  arrivalTime: Date
-): Promise<{ shareUrl: string; monitorUrl: string; pathId: string }> => {
+export const createShareableRoute = async (calculationState: any): Promise<{ shareUrl: string; monitorUrl: string; pathId: string }> => {
   try {
     const pathData = {
-      origin: origin.name,
-      destination: destination.name,
-      arrivalTime: arrivalTime.toISOString(),
-      originLat: origin.coordinates.latitude,
-      originLng: origin.coordinates.longitude,
-      destLat: destination.coordinates.latitude,
-      destLng: destination.coordinates.longitude,
+      creator_id: await getDeviceUUID() || 'unknown',
+      path: serializeCalculationState(calculationState),
     };
     
     const response = await createPath(pathData);
@@ -60,49 +61,6 @@ export const extractMonitorPathId = (): string | null => {
   const pathMatch = path.match(/\/monitor\/([^\/]+)/);
   
   return pathMatch ? pathMatch[1] : null;
-};
-
-// 기존 함수들도 유지 (레거시 지원용)
-export const encodeRouteToUrl = (
-  origin: { name: string; coordinates: { latitude: number; longitude: number } },
-  destination: { name: string; coordinates: { latitude: number; longitude: number } },
-  arrivalTime: Date
-): string => {
-  const params = new URLSearchParams({
-    origin: origin.name,
-    destination: destination.name,
-    arrivalTime: arrivalTime.toISOString(),
-    originLat: origin.coordinates.latitude.toString(),
-    originLng: origin.coordinates.longitude.toString(),
-    destLat: destination.coordinates.latitude.toString(),
-    destLng: destination.coordinates.longitude.toString(),
-  });
-
-  return `${window.location.origin}/share?${params.toString()}`;
-};
-
-export const decodeRouteFromUrl = (): RouteParams | null => {
-  if (typeof window === 'undefined') return null;
-  
-  const urlParams = new URLSearchParams(window.location.search);
-  
-  const origin = urlParams.get('origin');
-  const destination = urlParams.get('destination');
-  const arrivalTime = urlParams.get('arrivalTime');
-  
-  if (!origin || !destination || !arrivalTime) {
-    return null;
-  }
-
-  return {
-    origin,
-    destination,
-    arrivalTime,
-    originLat: urlParams.get('originLat') ? parseFloat(urlParams.get('originLat')!) : undefined,
-    originLng: urlParams.get('originLng') ? parseFloat(urlParams.get('originLng')!) : undefined,
-    destLat: urlParams.get('destLat') ? parseFloat(urlParams.get('destLat')!) : undefined,
-    destLng: urlParams.get('destLng') ? parseFloat(urlParams.get('destLng')!) : undefined,
-  };
 };
 
 export const cleanUrl = () => {

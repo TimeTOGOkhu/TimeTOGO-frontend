@@ -1,5 +1,5 @@
 // app/result.web.tsx
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -11,19 +11,17 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useCalculationStore } from "@store/calculationStore";
+import { useGroupStore } from "@store/groupStore";
+import { locationService, requestWebLocation } from "@/services/locationService";
 import {
   TextSmall,
   TextMedium,
   TextXLarge,
   TextXXXLarge,
-  TextNormal,
 } from "@components/TextSize";
 import { DynamicIcon } from "@components/DynamicIcon";
 import PressableOpacity from "@/components/PressableOpacity";
 import { decodePolygon } from "@/services/routeService";
-
-// Google Maps API key - 실제 키로 교체해야 합니다
-const GOOGLE_MAPS_API_KEY = "YOUR_GOOGLE_MAPS_API_KEY";
 
 // 교통수단 유형에 따른 경로 색상 설정
 const getPolylineColor = (vehicleType?: string): string => {
@@ -51,20 +49,45 @@ const convertToGoogleMapsPositions = (polylineString: string): {lat: number, lng
   }
 };
 
-// 지연 함수
-function delay(time: number) {
-  return new Promise(resolve => setTimeout(resolve, time));
-}
-
 export default function ResultScreen() {
   const mapRef = useRef<any>(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{latitude: number, longitude: number} | null>(null);
   const [googleMaps, setGoogleMaps] = useState<any>(null);
-
+  const [mapLoaded, setMapLoaded] = useState(false);
+  
   // Zustand 스토어에서 계산 결과 가져오기
-  const { origin, destination, route, weather, isLoading, error } =
-    useCalculationStore();
+  const { origin, destination, route, weather, isLoading, error } = useCalculationStore();
+  const { pathId, isCreator } = useGroupStore();
+
+  // 웹에서 위치 추적 시작
+  useEffect(() => {
+    if (pathId && !isCreator) {
+      const startLocationSharing = async () => {
+        try {
+          const success = await locationService.startLocationSharing({
+            pathId,
+            enabled: true,
+            interval: 60000, // 1분마다
+          });
+          
+          if (success) {
+            console.log('웹에서 위치 공유 시작됨');
+          } else {
+            console.warn('웹에서 위치 공유 시작 실패');
+          }
+        } catch (error) {
+          console.error('웹 위치 공유 오류:', error);
+        }
+      };
+      
+      startLocationSharing();
+      
+      // 컴포넌트 언마운트 시 위치 공유 중지
+      return () => {
+        locationService.stopLocationSharing();
+      };
+    }
+  }, [pathId, isCreator]);
 
   // Google Maps API 로딩
   useEffect(() => {
@@ -74,7 +97,7 @@ export default function ResultScreen() {
           // Google Maps Script 로딩
           if (!window.google) {
             const script = document.createElement('script');
-            script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=geometry`;
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY!}&libraries=geometry`;
             script.async = true;
             script.defer = true;
 
@@ -105,32 +128,33 @@ export default function ResultScreen() {
 
   // 웹용 현재 위치 가져오기
   useEffect(() => {
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setCurrentLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-          });
-        },
-        (error) => {
-          console.error('위치 정보를 가져오는데 실패했습니다:', error);
-        }
-      );
-    }
+    const success = (position: GeolocationPosition) => {
+      const crd = position.coords;
+      console.log("Your current position is:");
+      console.log(`Latitude : ${crd.latitude}`);
+      console.log(`Longitude: ${crd.longitude}`);
+      console.log(`More or less ${crd.accuracy} meters.`);
+      
+      setCurrentLocation({
+        latitude: crd.latitude,
+        longitude: crd.longitude
+      });
+    };
+
+    const error = (err: GeolocationPositionError) => {
+      console.warn(`ERROR(${err.code}): ${err.message}`);
+      console.error('위치 정보를 가져오는데 실패했습니다:', err);
+    };
+
+    requestWebLocation(success, error);
   }, []);
 
-  // Google Maps 초기화
-  useEffect(() => {
-    if (mapLoaded && googleMaps && mapRef.current) {
-      initializeMap();
-    }
-  }, [mapLoaded, googleMaps, origin, destination, route]);
-
-  const initializeMap = () => {
+  const initializeMap = useCallback(() => {
     if (!googleMaps || !mapRef.current) return;
 
-    const center = origin 
+    const center = currentLocation 
+      ? { lat: currentLocation.latitude, lng: currentLocation.longitude }
+      : origin 
       ? { lat: origin.coordinates.latitude, lng: origin.coordinates.longitude }
       : { lat: 37.5665, lng: 126.9780 };
 
@@ -146,6 +170,18 @@ export default function ResultScreen() {
         }
       ]
     });
+
+    // 현재 위치 마커 (최우선)
+    if (currentLocation) {
+      new googleMaps.maps.Marker({
+        position: { lat: currentLocation.latitude, lng: currentLocation.longitude },
+        map: map,
+        title: '현재 위치',
+        icon: {
+          url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png'
+        }
+      });
+    }
 
     // 출발지 마커
     if (origin) {
@@ -190,24 +226,65 @@ export default function ResultScreen() {
       });
     }
 
-    // 항상 출발지 기준으로 줌 레벨 16 유지
-    if (origin) {
+    // 항상 현재 위치 우선, 그 다음 출발지 기준으로 줌 레벨 16 유지
+    if (currentLocation) {
+      map.setCenter({ lat: currentLocation.latitude, lng: currentLocation.longitude });
+      map.setZoom(16);
+    } else if (origin) {
       map.setCenter({ lat: origin.coordinates.latitude, lng: origin.coordinates.longitude });
       map.setZoom(16);
     } else if (destination) {
       map.setCenter({ lat: destination.coordinates.latitude, lng: destination.coordinates.longitude });
       map.setZoom(16);
     }
-  };
+  }, [googleMaps, origin, destination, route, currentLocation]);
+
+  // Google Maps 초기화
+  useEffect(() => {
+    if (mapLoaded && googleMaps && mapRef.current) {
+      initializeMap();
+    }
+  }, [mapLoaded, googleMaps, initializeMap]);
 
   // 내 위치로 이동
   const goToMyLocation = () => {
-    if (currentLocation && googleMaps && mapRef.current) {
-      const map = new googleMaps.maps.Map(mapRef.current, {
-        zoom: 16,
-        center: { lat: currentLocation.latitude, lng: currentLocation.longitude }
-      });
-    }
+    const success = (position: GeolocationPosition) => {
+      const crd = position.coords;
+      console.log("Updated current position:");
+      console.log(`Latitude : ${crd.latitude}`);
+      console.log(`Longitude: ${crd.longitude}`);
+      
+      const newLocation = {
+        latitude: crd.latitude,
+        longitude: crd.longitude
+      };
+      
+      setCurrentLocation(newLocation);
+      
+      if (googleMaps && mapRef.current) {
+        const map = new googleMaps.maps.Map(mapRef.current, {
+          zoom: 16,
+          center: { lat: newLocation.latitude, lng: newLocation.longitude }
+        });
+        
+        // 현재 위치 마커 추가
+        new googleMaps.maps.Marker({
+          position: { lat: newLocation.latitude, lng: newLocation.longitude },
+          map: map,
+          title: '현재 위치',
+          icon: {
+            url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png'
+          }
+        });
+      }
+    };
+
+    const error = (err: GeolocationPositionError) => {
+      console.warn(`위치 오류(${err.code}): ${err.message}`);
+      alert('위치 정보를 가져올 수 없습니다. 브라우저에서 위치 접근을 허용했는지 확인해주세요.');
+    };
+
+    requestWebLocation(success, error);
   };
 
   // 경로 정보가 없거나 에러가 발생하면 처리

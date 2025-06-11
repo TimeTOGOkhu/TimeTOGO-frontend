@@ -9,7 +9,7 @@ import {
   Dimensions,
   Share,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, initialWindowMetrics } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useCalculationStore } from "@store/calculationStore";
 import {
@@ -26,12 +26,13 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import { decodePolygon, extractTMapCoordinates } from "@/services/routeService";
 import * as Location from 'expo-location';
 import haversine from 'haversine';
-import { encodeRouteToUrl } from '@/utils/urlUtils';
 import { createShareableRoute } from '@/utils/urlUtils'; 
 import { useGroupStore } from '@/store/groupStore'; 
 import LocationTracker from '@/components/LocationTracker';
 import GroupMembersMap from '@/components/GroupMembersMap';
 import { LocationData } from '@/services/pathService';
+
+const insets = initialWindowMetrics?.insets;
 
 // 네이버맵 스타일러 추천 스타일(밝고 심플, 주요 도로/철도/공원/수역 강조, 불필요한 요소 최소화)
 const mapStyle = [
@@ -209,6 +210,9 @@ export default function ResultScreen() {
         locationSubscription.current = null;
       }
       setIsFollowingUser(false);
+
+      const { clearGroup } = useGroupStore.getState();
+      clearGroup();
     };
   }, []);
 
@@ -528,17 +532,18 @@ export default function ResultScreen() {
     if (!origin || !destination || !route) return;
 
     try {
-      const arrivalTime = route.arrivalTime ? new Date(route.arrivalTime) : new Date();
+      // 현재 CalculationState 전체를 가져오기
+      const calculationState = useCalculationStore.getState();
       
-      // 백엔드 API를 사용하여 공유 링크 생성
-      const { shareUrl, monitorUrl, pathId } = await createShareableRoute(origin, destination, arrivalTime);
+      // 백엔드 API를 사용하여 공유 링크 생성 (CalculationState 전체 전달)
+      const { shareUrl, monitorUrl, pathId } = await createShareableRoute(calculationState);
       
       // 그룹 정보 설정 (생성자로)
       const { setPathId } = useGroupStore.getState();
       setPathId(pathId, true);
       
       await Share.share({
-        message: `TimeTOGO 경로 공유\n${origin.name}에서 ${destination.name}으로 가는 경로\n\n경로 보기: ${shareUrl}\n실시간 추적: ${monitorUrl}`,
+        message: `TimeTOGO 경로 \n${origin.name}에서 ${destination.name}으로 가는 경로\n\n공유 경로: ${shareUrl}\n실시간 추적: ${monitorUrl}`,
         url: shareUrl,
         title: 'TimeTOGO 경로 공유',
       });
@@ -873,23 +878,21 @@ export default function ResultScreen() {
           {/* 상단 메시지 */}
           <View style={styles.header}>
             {/* 좌측 상단 회색 뒤로가기 아이콘(상자/글자 없이) */}
-            <Pressable
+            <PressableOpacity
               style={styles.backIconOnly}
               onPress={handleBackPress}
               hitSlop={10}
             >
               <DynamicIcon name="arrow-left" size={22} color="#888" />
-            </Pressable>
+            </PressableOpacity>
             {/* 우측 상단 공유 버튼(링크 아이콘, 연결X) */}
-            <Pressable
+            <PressableOpacity
               style={styles.shareIconOnly}
-              onPress={() => {
-                Alert.alert("공유 기능", "연결 예정입니다.");
-              }}
+              onPress={shareRouteLink}
               hitSlop={10}
             >
               <DynamicIcon name="link" size={22} color="#888" />
-            </Pressable>
+            </PressableOpacity>
             {isNavigationStarted && currentWalkingInstruction && navigationMode === 'walking' ? (
               // 도보 안내 문구일 때
               <TextXXXLarge style={{ 
@@ -1026,7 +1029,7 @@ export default function ResultScreen() {
               <TextMedium style={{ color: '#fff', marginTop: 4 }}>
                 {route?.steps?.[transferStepIndex]?.departure_stop}에서 탑승하세요
               </TextMedium>
-              <Pressable
+              <PressableOpacity
                 style={{
                   marginTop: 16,
                   backgroundColor: '#fff',
@@ -1042,7 +1045,7 @@ export default function ResultScreen() {
                 <TextMedium style={{ color: '#FF3B30', fontFamily: 'Pretendard_Bold' }}>
                   탑승 완료
                 </TextMedium>
-              </Pressable>
+              </PressableOpacity>
             </View>
           )}
           </View>
@@ -1060,7 +1063,7 @@ export default function ResultScreen() {
             {/* 환승 정보(네이버 길찾기 스타일) */}
             {renderTransferInfo()}
           </View>
-          {renderShareButton()}
+          {/* {renderShareButton()} */}
 
           {/* 도착 시간 안내 */}
           {/* 
@@ -1214,7 +1217,7 @@ const styles = StyleSheet.create({
     fontFamily: "Pretendard_SemiBold",
   },
   mapSection: {
-    height: height - 240,
+    height: height - 240 - (insets?.bottom || 0),
     marginBottom: 12,
   },
   sectionTitle: {

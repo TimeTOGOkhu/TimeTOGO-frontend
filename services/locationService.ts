@@ -1,6 +1,7 @@
 // services/locationService.ts 수정
 import * as Location from 'expo-location';
 import { Platform } from 'react-native';
+import { getDeviceUUID } from '@/utils/deviceId';
 import { updateLocation } from '@/services/pathService';
 
 export interface LocationServiceConfig {
@@ -72,9 +73,12 @@ class LocationService {
           lon: location.coords.longitude,
         };
 
+        const deviceId = await getDeviceUUID();
+
         if (this.shouldSendLocation(newLocation)) {
           await updateLocation(this.config.pathId, {
             ...newLocation,
+            user_id: deviceId!,
             timestamp: Date.now(),
           });
 
@@ -134,4 +138,30 @@ class LocationService {
 }
 
 export const locationService = new LocationService();
+
+// 웹용 위치 요청 함수 (간단한 JavaScript 문법)
+export function requestWebLocation(
+  onSuccess: (position: GeolocationPosition) => void,
+  onError: (error: GeolocationPositionError) => void
+): void {
+  if (typeof window === 'undefined' || !navigator.geolocation) {
+    const error = {
+      code: 2,
+      message: 'Geolocation is not supported',
+      PERMISSION_DENIED: 1,
+      POSITION_UNAVAILABLE: 2,
+      TIMEOUT: 3
+    } as GeolocationPositionError;
+    onError(error);
+    return;
+  }
+
+  const options = {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 0,
+  };
+
+  navigator.geolocation.getCurrentPosition(onSuccess, onError, options);
+}
 
