@@ -89,8 +89,9 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   header: {
-    height: 72,
+    height: 100,
     justifyContent: 'center',
+    alignItems: 'center',
     borderBottomColor: '#C6C8C9',
     borderBottomWidth: 1,
   },

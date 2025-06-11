@@ -37,6 +37,7 @@ interface RouteStep {
   arrival_time?: string;
   num_stops?: number;
   polyline?: string;
+  short_name?: string;
 }
 
 interface RouteResponse {
@@ -120,6 +121,7 @@ export const calculateRoute = async (params: CalculateRouteParams, origin: Store
       throw new Error('응답 데이터 파싱에 실패했습니다');
     }
 
+    console.log('data.steps:', data.steps);
     // 첫 번째 스텝의 출발 시간 계산 (도착 시간에서 총 소요 시간을 빼서 계산)
     const arrivalUnixTime = parseInt(params.arrival_time);
     const departureUnixTime = arrivalUnixTime - data.duration_sec;
@@ -129,6 +131,13 @@ export const calculateRoute = async (params: CalculateRouteParams, origin: Store
     const weatherCondition = lastStep.weather_condition;
     
     // 경로 정보 업데이트
+    console.log('routeInfo:', {
+      distance: 0,
+      duration: data.duration_sec,
+      arrivalTime: new Date(arrivalUnixTime * 1000).toISOString(),
+      departureTime: new Date(departureUnixTime * 1000).toISOString(),
+      steps: data.steps,
+    });
     store.setRoute({
       distance: 0, // 총 거리는 계산 필요
       duration: data.duration_sec, // 초 단위
@@ -168,6 +177,7 @@ export const calculateRoute = async (params: CalculateRouteParams, origin: Store
     };
 
     // 2) 스토어에도 저장
+    console.log('routeInfo:', routeInfo);
     store.setRoute(routeInfo);
     store.setWeather(weatherInfo);
     store.setLoadingFinished();
