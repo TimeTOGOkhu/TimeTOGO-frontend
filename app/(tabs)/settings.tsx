@@ -54,12 +54,12 @@ export default function SettingsScreen() {
         </View>
 
         {/* 알림 설정 */}
-        <View style={styles.card}>
+        {/* <View style={styles.card}>
           <View style={styles.row}>
             <TextMedium style={styles.label}>{t('notifications')}</TextMedium>
             <Switch value={isNotificationEnabled} onValueChange={setIsNotificationEnabled} />
           </View>
-        </View>
+        </View> */}
 
         {/* 여유 시간 설정 */}
         <View style={styles.card}>
