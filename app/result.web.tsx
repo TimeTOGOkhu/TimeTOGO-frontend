@@ -7,9 +7,11 @@ import {
   Alert,
   ActivityIndicator,
   Text,
+  Dimensions
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import haversine from 'haversine';
 import { useCalculationStore } from "@store/calculationStore";
 import { useGroupStore } from "@store/groupStore";
 import { locationService, requestWebLocation } from "@/services/locationService";
@@ -21,7 +23,14 @@ import {
 } from "@components/TextSize";
 import { DynamicIcon } from "@components/DynamicIcon";
 import PressableOpacity from "@/components/PressableOpacity";
-import { decodePolygon } from "@/services/routeService";
+import { decodePolygon, fetchWalkingRoute, extractTMapCoordinates } from "@/services/routeService";
+
+// 두 지점 간의 거리를 계산하는 함수 (미터 단위)
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const a = { latitude: lat1, longitude: lon1 };
+  const b = { latitude: lat2, longitude: lon2 };
+  return haversine(a, b, { unit: 'meter' });
+};
 
 // 교통수단 유형에 따른 경로 색상 설정
 const getPolylineColor = (vehicleType?: string): string => {
@@ -49,11 +58,25 @@ const convertToGoogleMapsPositions = (polylineString: string): {lat: number, lng
   }
 };
 
+const { width, height } = Dimensions.get('window');
+
 export default function ResultScreen() {
   const mapRef = useRef<any>(null);
   const [currentLocation, setCurrentLocation] = useState<{latitude: number, longitude: number} | null>(null);
+  const currentLocationRef = useRef<{latitude: number, longitude: number} | null>(null);
   const [googleMaps, setGoogleMaps] = useState<any>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  
+  // 도보 경로 관련 상태 변수들 (native.tsx와 동일)
+  const [isNavigationStarted, setIsNavigationStarted] = useState<boolean>(false);
+  const isNavigationStartedRef = useRef(false);
+  const [currentWalkingInstruction, setCurrentWalkingInstruction] = useState<string | null>(null);
+  const [walkingRoutes, setWalkingRoutes] = useState<Record<number, any>>({});
+  const [navigationMode, setNavigationMode] = useState<'walking' | 'transit' | 'done'>('walking');
+  const [showTransferPopup, setShowTransferPopup] = useState(false);
+  const [transferStepIndex, setTransferStepIndex] = useState<number | null>(null);
+  const [isFollowingUser, setIsFollowingUser] = useState<boolean>(false);
+  const watchId = useRef<number | null>(null);
   
   // Zustand 스토어에서 계산 결과 가져오기
   const { origin, destination, route, weather, isLoading, error } = useCalculationStore();
@@ -88,6 +111,155 @@ export default function ResultScreen() {
       };
     }
   }, [pathId, isCreator]);
+
+  // currentLocation과 ref 동기화 함수
+  const setCurrentLocationBoth = (location: { latitude: number; longitude: number }) => {
+    setCurrentLocation(location);
+    currentLocationRef.current = location;
+  };
+
+  // TMap 도보 경로 가져오기 함수
+  const fetchTMapWalkingRoutes = useCallback(async () => {
+    if (route?.steps && !isLoading) {
+      const walkingSteps = route.steps.filter(step => step.mode === 'WALKING');
+      console.log(`도보 경로 ${walkingSteps.length}개 발견`);
+      
+      if (walkingSteps.length > 0) {
+        const newWalkingRoutes: Record<number, any> = {};
+        
+        // 각 도보 경로에 대해 TMap API 호출
+        for (let i = 0; i < route.steps.length; i++) {
+          const step = route.steps[i];
+          if (step.mode === 'WALKING') {
+            console.log(`도보 경로 ${i} 처리 중: ${step.start_location.lat},${step.start_location.lng} → ${step.end_location.lat},${step.end_location.lng}`);
+            
+            const origin = {
+              latitude: step.start_location.lat,
+              longitude: step.start_location.lng
+            };
+            const destination = {
+              latitude: step.end_location.lat,
+              longitude: step.end_location.lng
+            };
+            
+            try {
+              const tMapRoute = await fetchWalkingRoute(origin, destination);
+              if (tMapRoute) {
+                console.log(`TMap 도보 경로 ${i} 성공:`, tMapRoute.features.length, '피처');
+                newWalkingRoutes[i] = tMapRoute;
+              } else {
+                console.log(`TMap 도보 경로 ${i} 실패: 데이터 없음`);
+              }
+            } catch (error) {
+              console.error(`TMap 도보 경로 ${i} 오류:`, error);
+            }
+          }
+        }
+        
+        if (Object.keys(newWalkingRoutes).length > 0) {
+          console.log(`총 ${Object.keys(newWalkingRoutes).length}개 TMap 도보 경로 로드됨`);
+          setWalkingRoutes(newWalkingRoutes);
+        }
+      }
+    }
+  }, [route?.steps, isLoading]);
+
+  // TMap 기반 도보 상세 안내 텍스트 생성
+  const getTMapWalkingInstruction = (stepIndex: number) => {
+    if (!walkingRoutes[stepIndex] || !currentLocationRef.current) {
+      return null;
+    }
+    const features = walkingRoutes[stepIndex].features;
+    // 주요 turn point만 추출 (turnType이 있는 Point)
+    const turnPoints = features
+      .filter((feature: any) => feature.geometry.type === 'Point' && feature.properties.turnType)
+      .map((feature: any) => ({
+        ...feature,
+        lat: feature.geometry.coordinates[1],
+        lng: feature.geometry.coordinates[0],
+        turnType: feature.properties.turnType,
+        description: feature.properties.description || '',
+      }))
+      .filter((tp: any) => tp.turnType !== 200 && tp.turnType !== 201); // 출발/도착 제외
+
+    if (turnPoints.length === 0) return null;
+    const curLat = currentLocationRef.current.latitude;
+    const curLng = currentLocationRef.current.longitude;
+
+    let foundIdx = -1;
+    for (let i = 0; i < turnPoints.length - 1; i++) {
+      const x1 = turnPoints[i].lng, y1 = turnPoints[i].lat;
+      const x2 = turnPoints[i+1].lng, y2 = turnPoints[i+1].lat;
+      const x0 = curLng, y0 = curLat;
+      const dx = x2 - x1, dy = y2 - y1;
+      const len2 = dx*dx + dy*dy;
+      if (len2 === 0) continue;
+      const t = ((x0 - x1) * dx + (y0 - y1) * dy) / len2;
+      if (t >= 0 && t <= 1) {
+        foundIdx = i+1;
+        break;
+      }
+    }
+    let nextTurn;
+    if (foundIdx !== -1) {
+      nextTurn = turnPoints[foundIdx];
+    } else {
+      // 선분 위에 없으면 가장 가까운 turn point 안내
+      let minDist = Infinity, minIdx = 0;
+      for (let i = 0; i < turnPoints.length; i++) {
+        const d = calculateDistance(curLat, curLng, turnPoints[i].lat, turnPoints[i].lng);
+        if (d < minDist) {
+          minDist = d;
+          minIdx = i;
+        }
+      }
+      nextTurn = turnPoints[minIdx];
+    }
+    const distance = calculateDistance(curLat, curLng, nextTurn.lat, nextTurn.lng);
+    let direction = '방향';
+    switch (nextTurn.turnType) {
+      case 11: direction = '직진'; break;
+      case 12: direction = '좌회전'; break;
+      case 13: direction = '우회전'; break;
+      case 14: direction = '유턴'; break;
+      case 16: direction = '8시 방향'; break;
+      case 17: direction = '10시 방향'; break;
+      case 18: direction = '2시 방향'; break; 
+      case 19: direction = '4시 방향'; break;
+      case 125: direction = '육교'; break;
+      case 126: direction = '지하보도'; break;
+      case 211: direction = '횡단보도'; break;
+      case 212: direction = '좌측 횡단보도'; break;
+      case 213: direction = '우측 횡단보도'; break;
+      case 214: direction = '8시 방향 횡단보도'; break;
+      case 215: direction = '10시 방향 횡단보도'; break;
+      case 216: direction = '2시 방향 횡단보도'; break;
+      case 217: direction = '4시 방향 횡단보도'; break;
+      default: direction = '직진';
+    }
+    const distText = `${Math.round(distance)}m 앞`;
+    return `${distText} ${direction}`;
+  };
+
+  // 도보 안내 문구 업데이트 함수
+  const updateWalkingInstruction = (currentPos: { latitude: number; longitude: number }) => {
+    if (!route?.steps || !walkingRoutes) return;
+    for (let i = 0; i < route.steps.length; i++) {
+      const step = route.steps[i];
+      if (step.mode === 'WALKING' && walkingRoutes[i]) {
+        const instruction = getTMapWalkingInstruction(i);
+        if (instruction) {
+          setCurrentWalkingInstruction(instruction);
+          return;
+        }
+      }
+    }
+  };
+
+  // TMap 도보 경로 로드
+  useEffect(() => {
+    fetchTMapWalkingRoutes();
+  }, [fetchTMapWalkingRoutes]);
 
   // Google Maps API 로딩
   useEffect(() => {
@@ -211,7 +383,20 @@ export default function ResultScreen() {
     if (route?.steps) {
       route.steps.forEach((step, index) => {
         if (step.polyline) {
-          const path = convertToGoogleMapsPositions(step.polyline);
+          // TMap 도보 경로가 있으면 우선 사용하고, 없으면 기본 폴리라인 사용
+          let path: {lat: number, lng: number}[] = [];
+          
+          if (step.mode === 'WALKING' && walkingRoutes[index]) {
+            // TMap 도보 경로 사용
+            const tmapCoords = extractTMapCoordinates(walkingRoutes[index]);
+            path = tmapCoords.map(coord => ({lat: coord.latitude, lng: coord.longitude}));
+            console.log(`스텝 ${index}: TMap 도보 경로 사용 (${path.length}개 좌표)`);
+          } else {
+            // 기본 Google 폴리라인 사용
+            path = convertToGoogleMapsPositions(step.polyline);
+            console.log(`스텝 ${index}: 기본 폴리라인 사용 (${path.length}개 좌표)`);
+          }
+          
           if (path.length > 0) {
             new googleMaps.maps.Polyline({
               path: path,
@@ -237,7 +422,7 @@ export default function ResultScreen() {
       map.setCenter({ lat: destination.coordinates.latitude, lng: destination.coordinates.longitude });
       map.setZoom(16);
     }
-  }, [googleMaps, origin, destination, route, currentLocation]);
+  }, [googleMaps, origin, destination, route, currentLocation, walkingRoutes]);
 
   // Google Maps 초기화
   useEffect(() => {
@@ -259,7 +444,46 @@ export default function ResultScreen() {
         longitude: crd.longitude
       };
       
-      setCurrentLocation(newLocation);
+      setCurrentLocationBoth(newLocation);
+      
+      // 출발지에서 10m 이상 벗어났는지 확인
+      if (origin && !isNavigationStartedRef.current) {
+        const distanceFromOrigin = calculateDistance(
+          crd.latitude,
+          crd.longitude,
+          origin.coordinates.latitude,
+          origin.coordinates.longitude
+        );
+        if (distanceFromOrigin >= 10) {
+          setIsNavigationStarted(true);
+          isNavigationStartedRef.current = true;
+        }
+      }
+
+      // 환승 근처 도달 감지 (TRANSIT step 출발 정류장)
+      if (route?.steps) {
+        for (let i = 0; i < route.steps.length; i++) {
+          const step = route.steps[i];
+          if (step.mode === 'TRANSIT' && step.start_location && step.start_location.lat && step.start_location.lng) {
+            const dist = calculateDistance(
+              newLocation.latitude,
+              newLocation.longitude,
+              step.start_location.lat,
+              step.start_location.lng
+            );
+            if (dist < 50 && navigationMode === 'walking') {
+              setShowTransferPopup(true);
+              setTransferStepIndex(i);
+              break;
+            }
+          }
+        }
+      }
+
+      // 네비게이션이 시작되었고 도보 경로가 있을 때 안내 문구 업데이트
+      if (isNavigationStartedRef.current && navigationMode === 'walking') {
+        updateWalkingInstruction(newLocation);
+      }
       
       if (googleMaps && mapRef.current) {
         const map = new googleMaps.maps.Map(mapRef.current, {
@@ -277,6 +501,12 @@ export default function ResultScreen() {
           }
         });
       }
+
+      // 위치 추적 시작
+      if (!isFollowingUser) {
+        setIsFollowingUser(true);
+        startWatching();
+      }
     };
 
     const error = (err: GeolocationPositionError) => {
@@ -286,6 +516,81 @@ export default function ResultScreen() {
 
     requestWebLocation(success, error);
   };
+
+  // 위치 추적 시작
+  const startWatching = () => {
+    if (watchId.current) {
+      navigator.geolocation.clearWatch(watchId.current);
+    }
+
+    watchId.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const crd = position.coords;
+        const newLocation = {
+          latitude: crd.latitude,
+          longitude: crd.longitude
+        };
+        
+        setCurrentLocationBoth(newLocation);
+
+        // 출발지에서 10m 이상 벗어났는지 확인
+        if (origin && !isNavigationStartedRef.current) {
+          const distanceFromOrigin = calculateDistance(
+            crd.latitude,
+            crd.longitude,
+            origin.coordinates.latitude,
+            origin.coordinates.longitude
+          );
+          if (distanceFromOrigin >= 10) {
+            setIsNavigationStarted(true);
+            isNavigationStartedRef.current = true;
+          }
+        }
+
+        // 환승 근처 도달 감지
+        if (route?.steps) {
+          for (let i = 0; i < route.steps.length; i++) {
+            const step = route.steps[i];
+            if (step.mode === 'TRANSIT' && step.start_location && step.start_location.lat && step.start_location.lng) {
+              const dist = calculateDistance(
+                newLocation.latitude,
+                newLocation.longitude,
+                step.start_location.lat,
+                step.start_location.lng
+              );
+              if (dist < 50 && navigationMode === 'walking') {
+                setShowTransferPopup(true);
+                setTransferStepIndex(i);
+                break;
+              }
+            }
+          }
+        }
+
+        // 네비게이션이 시작되었고 도보 경로가 있을 때 안내 문구 업데이트
+        if (isNavigationStartedRef.current && navigationMode === 'walking') {
+          updateWalkingInstruction(newLocation);
+        }
+      },
+      (err) => {
+        console.warn(`위치 추적 오류(${err.code}): ${err.message}`);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 30000,
+        timeout: 27000
+      }
+    );
+  };
+
+  // 컴포넌트 언마운트 시 위치 추적 중지
+  useEffect(() => {
+    return () => {
+      if (watchId.current) {
+        navigator.geolocation.clearWatch(watchId.current);
+      }
+    };
+  }, []);
 
   // 경로 정보가 없거나 에러가 발생하면 처리
   useEffect(() => {
@@ -588,7 +893,7 @@ export default function ResultScreen() {
               <span style={{ fontSize: 22, color: "#888" }}>←</span>
             </PressableOpacity>
             {/* 우측 상단 공유 버튼 */}
-            <PressableOpacity
+            {/* <PressableOpacity
               style={styles.shareIconOnly}
               onPress={() => {
                 window.alert("공유 기능\n연결 예정입니다.");
@@ -596,16 +901,28 @@ export default function ResultScreen() {
               hitSlop={10}
             >
               <span style={{ fontSize: 20, color: "#888" }}>🔗</span>
-            </PressableOpacity>
-            {getTopMessage() && (
-              <>
-                <TextXXXLarge style={{ color: "#3457D5", fontFamily: "Pretendard_ExtraBold", marginBottom: 4, textAlign: "center" }}>
-                  {getTopMessage() ? getTopMessage()!.time : ""}
-                </TextXXXLarge>
-                <TextXLarge style={{ color: "#3457D5", fontFamily: "Pretendard_Bold", textAlign: "center" }}>
-                  {getTopMessage()!.message}
-                </TextXLarge>
-              </>
+            </PressableOpacity> */}
+            {isNavigationStarted && currentWalkingInstruction && navigationMode === 'walking' ? (
+              // 도보 안내 문구일 때
+              <TextXXXLarge style={{ 
+                color: "#3457D5", 
+                fontFamily: "Pretendard_Bold", 
+                textAlign: "center",
+              }}>
+                {currentWalkingInstruction}
+              </TextXXXLarge>
+            ) : (
+              // 기본 메시지일 때
+              getTopMessage() && (
+                <>
+                  <TextXXXLarge style={{ color: "#3457D5", fontFamily: "Pretendard_ExtraBold", marginBottom: 4, textAlign: "center" }}>
+                    {getTopMessage() ? getTopMessage()!.time : ""}
+                  </TextXXXLarge>
+                  <TextXLarge style={{ color: "#3457D5", fontFamily: "Pretendard_Bold", textAlign: "center" }}>
+                    {getTopMessage()!.message}
+                  </TextXLarge>
+                </>
+              )
             )}
           </View>
 
@@ -630,6 +947,32 @@ export default function ResultScreen() {
 
           <SafeAreaView style={styles.safe} edges={["bottom"]}></SafeAreaView>
         </ScrollView>
+
+        {/* 환승 팝업 */}
+        {showTransferPopup && transferStepIndex !== null && route?.steps && (
+          <View style={styles.transferPopupOverlay}>
+            <View style={styles.transferPopup}>
+              <TextXLarge style={styles.transferPopupTitle}>
+                🚇 {route.steps[transferStepIndex].departure_stop}
+              </TextXLarge>
+              <TextMedium style={styles.transferPopupText}>
+                {route.steps[transferStepIndex].line_name} 탑승 지점에 도착했습니다
+              </TextMedium>
+              <PressableOpacity
+                style={styles.transferCompleteButton}
+                onPress={() => {
+                  setNavigationMode('transit');
+                  setShowTransferPopup(false);
+                  setCurrentWalkingInstruction(null);
+                }}
+              >
+                <TextMedium style={styles.transferCompleteButtonText}>
+                  탑승 완료
+                </TextMedium>
+              </PressableOpacity>
+            </View>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -653,13 +996,54 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 24,
     position: 'relative',
-    borderRadius: 12,
-    overflow: 'hidden',
-    elevation: 3,
+  },
+  // 환승 팝업 스타일
+  transferPopupOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 20,
+    zIndex: 1000,
+  },
+  transferPopup: {
+    backgroundColor: '#FF4444',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  transferPopupTitle: {
+    color: '#FFFFFF',
+    fontFamily: 'Pretendard_Bold',
+    fontSize: 18,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  transferPopupText: {
+    color: '#FFFFFF',
+    fontFamily: 'Pretendard_Medium',
+    fontSize: 14,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  transferCompleteButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    minWidth: 120,
+  },
+  transferCompleteButtonText: {
+    color: '#FF4444',
+    fontFamily: 'Pretendard_Bold',
+    fontSize: 16,
+    textAlign: 'center',
   },
   myLocationBtn: {
     position: 'absolute',
