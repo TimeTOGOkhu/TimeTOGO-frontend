@@ -23,7 +23,7 @@ import { DynamicIcon } from "@components/DynamicIcon";
 import { TransportIcon } from "@components/TransportIcon";
 import PressableOpacity from "@/components/PressableOpacity";
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
-import { decodePolygon, extractTMapCoordinates } from "@/services/routeService";
+import { decodePolygon, extractTMapCoordinates, fetchWalkingRoute } from "@/services/routeService";
 import * as Location from 'expo-location';
 import haversine from 'haversine';
 import { createShareableRoute } from '@/utils/urlUtils'; 
@@ -446,7 +446,6 @@ export default function ResultScreen() {
             if (step.mode === 'WALKING') {
               console.log(`도보 경로 ${i} 처리 중: ${step.start_location.lat},${step.start_location.lng} → ${step.end_location.lat},${step.end_location.lng}`);
               
-              const { fetchWalkingRoute } = await import('@/services/routeService');
               const origin = {
                 latitude: step.start_location.lat,
                 longitude: step.start_location.lng

@@ -1,8 +1,12 @@
 // API 호출을 위한 서비스 구현
 import { useCalculationStore } from '@store/calculationStore';
 import { useHistoryStore } from '@store/historyStore';
-import { LatLng } from 'react-native-maps';
 import { Location as StoreLocation } from '@store/calculationStore';
+
+type LatLng = {
+    latitude: number;
+    longitude: number;
+};
 
 // 람다 함수 응답 타입 정의
 interface WeatherCondition {
