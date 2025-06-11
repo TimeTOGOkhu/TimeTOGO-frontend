@@ -8,9 +8,15 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, LogBox } from 'react-native';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
+
+// 특정 경고 무시
+LogBox.ignoreLogs([
+  'Text strings must be rendered within a <Text> component',
+]);
+
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
